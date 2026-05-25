@@ -36,7 +36,7 @@ body {
 }
 #song-meta span { color:rgba(255,255,255,0.9); }
 
-/* CHORD + DEGREES — vertically positioned */
+/* CHORD + DEGREES */
 #hud-center {
   position:absolute;
   left:50%; transform:translateX(-50%);
@@ -54,26 +54,46 @@ body {
 }
 
 #degree-row {
-  display:flex; gap:14px; justify-content:center;
-  margin-top:24px;
+  display:flex; gap:10px; justify-content:center;
+  margin-top:20px;
 }
 .degree-box {
-  width:80px; height:80px; border-radius:10px;
+  width:72px; height:72px; border-radius:9px;
   border:1.5px solid rgba(255,255,255,0.15);
   background:rgba(255,255,255,0.05);
   display:flex; flex-direction:column;
-  align-items:center; justify-content:center; gap:4px;
+  align-items:center; justify-content:center; gap:3px;
   transition:all 0.2s ease;
 }
+/* current chord — purple */
 .degree-box.active {
   border-color:#b48cff;
   background:rgba(140,90,255,0.25);
-  box-shadow:0 0 20px rgba(140,90,255,0.5), inset 0 0 12px rgba(140,90,255,0.15);
+  box-shadow:0 0 18px rgba(140,90,255,0.5), inset 0 0 10px rgba(140,90,255,0.15);
 }
-.deg-num { font-size:14px; font-weight:700; color:rgba(255,255,255,0.28); line-height:1; }
+/* previous chord carry — amber */
+.degree-box.prev {
+  border-color:#ffb83c;
+  background:rgba(255,160,40,0.18);
+  box-shadow:0 0 14px rgba(255,160,40,0.4), inset 0 0 8px rgba(255,160,40,0.1);
+}
+.deg-num { font-size:12px; font-weight:700; color:rgba(255,255,255,0.28); line-height:1; }
 .degree-box.active .deg-num { color:rgba(255,255,255,0.5); }
-.deg-note { font-size:22px; font-weight:700; color:rgba(255,255,255,0.28); line-height:1; }
+.degree-box.prev .deg-num { color:rgba(255,200,100,0.6); }
+.deg-note { font-size:19px; font-weight:700; color:rgba(255,255,255,0.28); line-height:1; }
 .degree-box.active .deg-note { color:#fff; }
+.degree-box.prev .deg-note { color:#ffcc70; }
+
+/* chord annotation */
+#chord-annotation {
+  margin-top:14px;
+  font-family:'Noto Sans SC',sans-serif;
+  font-size:22px; font-style:italic;
+  color:rgba(255,255,255,0.65);
+  text-shadow:0 0 16px rgba(180,130,255,0.5);
+  letter-spacing:0.5px;
+  display:none;
+}
 
 /* PROGRESS */
 #progress-container {
@@ -128,7 +148,7 @@ body {
 
 /* LEFT panel */
 #panel-left {
-  width:280px; padding:18px; border-right:1px solid rgba(255,255,255,0.08);
+  width:300px; padding:18px; border-right:1px solid rgba(255,255,255,0.08);
   overflow-y:auto; display:flex; flex-direction:column; gap:12px;
 }
 #panel-left h3, #panel-right h3 {
@@ -152,27 +172,40 @@ body {
 .apply-btn:hover { background:rgba(140,90,255,0.3); }
 .divider { height:1px; background:rgba(255,255,255,0.07); margin:2px 0; }
 
-/* Note name grid (global, set once) */
+/* accidental toggle */
+.acc-row {
+  display:flex; gap:6px;
+}
+.acc-btn {
+  flex:1; padding:5px 0; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer;
+  font-family:'Space Mono',monospace; border:1px solid rgba(255,255,255,0.12);
+  background:rgba(255,255,255,0.04); color:rgba(255,255,255,0.4); transition:all 0.15s;
+}
+.acc-btn.active { background:rgba(140,90,255,0.25); border-color:#b48cff; color:#fff; }
+.acc-btn:hover:not(.active) { background:rgba(255,255,255,0.08); }
+
+/* Note name grid — 6 columns × 2 rows = 12 */
 #note-grid {
-  display:grid; grid-template-columns:repeat(7,1fr); gap:5px;
+  display:grid; grid-template-columns:repeat(6,1fr); gap:5px;
 }
 .note-cell {
   display:flex; flex-direction:column; align-items:center; gap:3px;
-  padding:6px 2px; border-radius:6px;
+  padding:5px 2px; border-radius:6px;
   background:rgba(140,90,255,0.1); border:1px solid rgba(140,90,255,0.25);
+}
+.note-cell.chromatic {
+  background:rgba(255,160,40,0.08); border-color:rgba(255,160,40,0.3);
 }
 .note-cell .nc-num { font-size:9px; color:rgba(255,255,255,0.35); font-family:'Space Mono',monospace; }
 .note-cell input {
   width:100%; background:transparent; border:none; border-bottom:1px solid rgba(255,255,255,0.15);
-  color:#fff; font-family:'Space Mono',monospace; font-size:12px; font-weight:700;
+  color:#fff; font-family:'Space Mono',monospace; font-size:11px; font-weight:700;
   text-align:center; outline:none; padding:2px 0;
 }
 .note-cell input:focus { border-bottom-color:#b48cff; }
 
 /* Vertical position slider */
-#pos-row {
-  display:flex; flex-direction:column; gap:5px;
-}
+#pos-row { display:flex; flex-direction:column; gap:5px; }
 #pos-row label { font-size:11px; color:rgba(255,255,255,0.32); }
 #pos-slider { width:100%; accent-color:#b48cff; }
 #pos-val { font-size:11px; color:rgba(255,255,255,0.4); font-family:'Space Mono',monospace; text-align:right; }
@@ -191,54 +224,84 @@ body {
 .dur-row input:focus { border-color:rgba(140,90,255,0.5); }
 .dur-row span { font-size:11px; color:rgba(255,255,255,0.2); }
 
-.tl-header {
-  display:grid; grid-template-columns:72px 120px 1fr 40px;
-  gap:8px; padding:0 12px;
-}
-.tl-header span { font-size:10px; color:rgba(255,255,255,0.22); letter-spacing:1px; }
-
 #timeline-list { display:flex; flex-direction:column; gap:7px; }
 
+/* timeline item — flex column */
 .tl-item {
-  display:grid; grid-template-columns:72px 120px 1fr 40px;
-  gap:8px; align-items:start;
+  display:flex; flex-direction:column; gap:8px;
   background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.07);
   border-radius:8px; padding:10px 12px;
   transition:border-color 0.2s;
 }
 .tl-item.tl-active { border-color:rgba(140,90,255,0.45); background:rgba(140,90,255,0.07); }
+
+/* top row inside each timeline item */
+.tl-top-row {
+  display:flex; gap:8px; align-items:flex-end;
+}
+.tl-col { display:flex; flex-direction:column; gap:3px; }
+.tl-col-time { width:72px; }
+.tl-col-chord { width:110px; }
+.tl-col-carry { display:flex; flex-direction:column; gap:3px; }
+
 .tl-item input[type="number"], .tl-item input[type="text"] {
   background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1);
   border-radius:5px; color:#fff; font-size:12px; padding:5px 7px; outline:none;
   font-family:'Space Mono',monospace; width:100%;
 }
 .tl-item input:focus { border-color:rgba(140,90,255,0.4); }
-.col-label { font-size:10px; color:rgba(255,255,255,0.25); margin-bottom:3px; display:block; }
+.col-label { font-size:10px; color:rgba(255,255,255,0.25); margin-bottom:1px; display:block; }
 
-/* highlight toggle — 7 small buttons */
+/* carry control */
+.carry-ctrl {
+  display:flex; align-items:center; gap:4px;
+}
+.carry-btn {
+  width:22px; height:22px; border-radius:4px;
+  border:1px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.05);
+  color:rgba(255,255,255,0.5); cursor:pointer; font-size:14px; line-height:1;
+  display:flex; align-items:center; justify-content:center; transition:all 0.12s;
+  font-family:'Space Mono',monospace;
+}
+.carry-btn:hover { background:rgba(255,180,60,0.2); border-color:#ffb83c; color:#ffcc70; }
+.carry-val {
+  font-size:13px; font-weight:700; color:#ffcc70; font-family:'Space Mono',monospace;
+  min-width:14px; text-align:center;
+}
+
+/* highlight grid — 6 columns × 2 rows = 12 */
 .hl-grid {
-  display:grid; grid-template-columns:repeat(7,1fr); gap:4px;
+  display:grid; grid-template-columns:repeat(6,1fr); gap:4px;
 }
 .hl-cell {
   display:flex; flex-direction:column; align-items:center; gap:2px;
-  padding:5px 2px; border-radius:5px; cursor:pointer;
+  padding:4px 2px; border-radius:5px; cursor:pointer;
   border:1px solid rgba(255,255,255,0.08);
   background:rgba(255,255,255,0.03);
   transition:all 0.15s; user-select:none;
 }
 .hl-cell:hover { border-color:rgba(180,140,255,0.3); background:rgba(140,90,255,0.1); }
 .hl-cell.on { border-color:#b48cff; background:rgba(140,90,255,0.25); }
-.hl-num { font-size:9px; color:rgba(255,255,255,0.28); font-family:'Space Mono',monospace; }
+.hl-num { font-size:8px; color:rgba(255,255,255,0.28); font-family:'Space Mono',monospace; }
 .hl-cell.on .hl-num { color:rgba(255,255,255,0.55); }
-.hl-note { font-size:11px; font-weight:700; color:rgba(255,255,255,0.28); font-family:'Space Mono',monospace; }
+.hl-note { font-size:10px; font-weight:700; color:rgba(255,255,255,0.28); font-family:'Space Mono',monospace; }
 .hl-cell.on .hl-note { color:#fff; }
 
+/* annotation input */
+.annotation-input {
+  width:100%; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08);
+  border-radius:5px; color:rgba(255,255,255,0.75); font-size:12px; padding:5px 8px; outline:none;
+  font-family:'Noto Sans SC',sans-serif; font-style:italic;
+}
+.annotation-input:focus { border-color:rgba(255,180,60,0.4); background:rgba(255,160,40,0.05); }
+.annotation-input::placeholder { color:rgba(255,255,255,0.18); font-style:italic; }
+
 .tl-del {
-  width:32px; height:32px; border-radius:6px;
+  width:30px; height:30px; border-radius:6px;
   border:1px solid rgba(220,80,80,0.3); background:rgba(220,80,80,0.1);
   color:rgba(255,100,100,0.7); cursor:pointer; font-size:14px;
   display:flex; align-items:center; justify-content:center; transition:all 0.15s;
-  margin-top:18px;
+  flex-shrink:0; margin-left:auto;
 }
 .tl-del:hover { background:rgba(220,80,80,0.25); color:#ff8888; }
 
@@ -283,6 +346,7 @@ body {
 <div id="hud-center">
   <div id="chord-name">BbMaj9</div>
   <div id="degree-row"></div>
+  <div id="chord-annotation"></div>
 </div>
 
 <div id="progress-container"><div id="progress-bar"></div></div>
@@ -311,7 +375,11 @@ body {
       <button class="apply-btn" onclick="applyStatic()">应用基本信息</button>
 
       <div class="divider"></div>
-      <h3>调式音名（全局，改一次）</h3>
+      <h3>音名（12个半音，全局）</h3>
+      <div class="acc-row">
+        <button class="acc-btn" id="acc-flat" onclick="setAccidental('flat')">♭ 降记号</button>
+        <button class="acc-btn" id="acc-sharp" onclick="setAccidental('sharp')">♯ 升记号</button>
+      </div>
       <div id="note-grid"></div>
       <button class="apply-btn" onclick="applyNotes()">应用音名</button>
 
@@ -332,12 +400,6 @@ body {
         <input id="in-total" type="number" min="1" value="30">
         <span>秒</span>
       </div>
-      <div class="tl-header">
-        <span>时间(s)</span>
-        <span>和弦名</span>
-        <span>高亮音级（点击切换）</span>
-        <span></span>
-      </div>
       <div id="timeline-list"></div>
       <button id="add-row-btn" onclick="addRow()">＋ 添加和弦</button>
     </div>
@@ -348,37 +410,66 @@ body {
 <div id="export-status">⏺ 导出中… <span id="export-timer">0s</span></div>
 
 <script>
-// Global note names (set once)
-let globalNotes = ['Gb','Ab','Bb','Cb','Db','Eb','F'];
+// 12 chromatic note names (flat default)
+// positions: C Db D Eb E F Gb G Ab A Bb B
+let globalNotes = ['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'];
+let accidental = 'flat';
 
+// Accidental positions (indices 1,3,6,8,10) — the 5 black keys
+const SHARP_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const FLAT_NAMES  = ['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'];
+
+// Remap from old 7-note Gb Major (Gb Ab Bb Cb Db Eb F) to 12-note chromatic
+// Gb=6, Ab=8, Bb=10, Cb=B=11, Db=1, Eb=3, F=5
 let timeline = [
-  { time:0,    chord:'BbMaj9', active:[2,3,4,5] },
-  { time:7,    chord:'C6',     active:[3,4,5] },
-  { time:13.5, chord:'Amin7',  active:[2,3,4] },
-  { time:20,   chord:'Dmin9',  active:[1,2,5] },
+  { time:0,    chord:'BbMaj9', active:[10,11,1,3],  annotation:'', carry:0 },
+  { time:7,    chord:'C6',     active:[11,1,3],      annotation:'', carry:0 },
+  { time:13.5, chord:'Amin7',  active:[10,11,1],     annotation:'', carry:0 },
+  { time:20,   chord:'Dmin9',  active:[8,10,3],      annotation:'', carry:0 },
 ];
 
-let vertPos = 320; // top px for hud-center
+let vertPos = 320;
 let rafId = null, startTime = null, isPlaying = false;
 let mediaRecorder = null, recordedChunks = [], exportTimerInt = null;
 let lastIdx = -1;
 
-// ── NOTE GRID (left panel) ──
+// ── ACCIDENTAL TOGGLE ──
+function setAccidental(type) {
+  accidental = type;
+  const names = type === 'sharp' ? SHARP_NAMES : FLAT_NAMES;
+  // update only the 5 accidental positions
+  [1,3,6,8,10].forEach(i => { globalNotes[i] = names[i]; });
+  // update input fields
+  [1,3,6,8,10].forEach(i => {
+    const el = document.getElementById('ng-'+i);
+    if (el) el.value = globalNotes[i];
+  });
+  document.getElementById('acc-flat').classList.toggle('active', type==='flat');
+  document.getElementById('acc-sharp').classList.toggle('active', type==='sharp');
+  refreshAllHLGrids();
+}
+
+// ── NOTE GRID (12 cells) ──
 function renderNoteGrid() {
   const grid = document.getElementById('note-grid');
   grid.innerHTML = '';
-  for (let d = 0; d < 7; d++) {
+  // Accidental positions (black keys)
+  const accPos = new Set([1,3,6,8,10]);
+  for (let d = 0; d < 12; d++) {
     const cell = document.createElement('div');
-    cell.className = 'note-cell';
+    cell.className = 'note-cell' + (accPos.has(d) ? ' chromatic' : '');
     cell.innerHTML = `<span class="nc-num">${d+1}</span>
       <input id="ng-${d}" value="${globalNotes[d]}" maxlength="4"
         onchange="globalNotes[${d}]=this.value.trim(); refreshAllHLGrids()">`;
     grid.appendChild(cell);
   }
+  // reflect current accidental
+  document.getElementById('acc-flat').classList.toggle('active', accidental==='flat');
+  document.getElementById('acc-sharp').classList.toggle('active', accidental==='sharp');
 }
 
 function applyNotes() {
-  for (let d = 0; d < 7; d++) {
+  for (let d = 0; d < 12; d++) {
     const el = document.getElementById('ng-'+d);
     if (el) globalNotes[d] = el.value.trim() || globalNotes[d];
   }
@@ -400,21 +491,37 @@ function renderList() {
     div.className = 'tl-item';
     div.id = 'tl-'+i;
     div.innerHTML = `
-      <div>
-        <span class="col-label">时间(s)</span>
-        <input type="number" min="0" step="0.1" value="${item.time}"
-          onchange="timeline[${i}].time=parseFloat(this.value)||0; sortTimeline()">
+      <div class="tl-top-row">
+        <div class="tl-col tl-col-time">
+          <span class="col-label">时间(s)</span>
+          <input type="number" min="0" step="0.1" value="${item.time}"
+            onchange="timeline[${i}].time=parseFloat(this.value)||0; sortTimeline()">
+        </div>
+        <div class="tl-col tl-col-chord">
+          <span class="col-label">和弦名</span>
+          <input type="text" value="${item.chord}"
+            onchange="timeline[${i}].chord=this.value; if(getCurrentIdx()===${i}) renderHUDChord(${i},false)">
+        </div>
+        <div class="tl-col-carry">
+          <span class="col-label">承接前</span>
+          <div class="carry-ctrl">
+            <button class="carry-btn" onclick="changeCarry(${i},-1)">−</button>
+            <span class="carry-val" id="carry-val-${i}">${item.carry||0}</span>
+            <button class="carry-btn" onclick="changeCarry(${i},1)">+</button>
+          </div>
+        </div>
+        <button class="tl-del" onclick="removeRow(${i})">✕</button>
       </div>
       <div>
-        <span class="col-label">和弦名</span>
-        <input type="text" value="${item.chord}"
-          onchange="timeline[${i}].chord=this.value; if(getCurrentIdx()===${i}) renderHUDChord(${i},false)">
-      </div>
-      <div>
-        <span class="col-label">高亮音级</span>
+        <span class="col-label">高亮音级（点击切换）</span>
         <div class="hl-grid" id="hl-${i}"></div>
       </div>
-      <button class="tl-del" onclick="removeRow(${i})">✕</button>`;
+      <div>
+        <span class="col-label">解说</span>
+        <input type="text" class="annotation-input" value="${item.annotation||''}"
+          placeholder="和弦分析、功能标注…"
+          onchange="timeline[${i}].annotation=this.value; if(getCurrentIdx()===${i}) updateAnnotation(${i})">
+      </div>`;
     list.appendChild(div);
     renderHLGrid(i);
   });
@@ -424,7 +531,7 @@ function renderHLGrid(i) {
   const grid = document.getElementById('hl-'+i);
   if (!grid) return;
   grid.innerHTML = '';
-  for (let d = 0; d < 7; d++) {
+  for (let d = 0; d < 12; d++) {
     const on = timeline[i].active.includes(d);
     const cell = document.createElement('div');
     cell.className = 'hl-cell' + (on ? ' on' : '');
@@ -440,6 +547,20 @@ function renderHLGrid(i) {
   }
 }
 
+function changeCarry(i, delta) {
+  timeline[i].carry = Math.max(0, Math.min(4, (timeline[i].carry||0) + delta));
+  const el = document.getElementById('carry-val-'+i);
+  if (el) el.textContent = timeline[i].carry;
+  if (getCurrentIdx() === i) renderHUDDegrees(i);
+}
+
+function updateAnnotation(i) {
+  const el = document.getElementById('chord-annotation');
+  const text = timeline[i].annotation || '';
+  el.textContent = text;
+  el.style.display = text ? 'block' : 'none';
+}
+
 function sortTimeline() {
   timeline.sort((a,b)=>a.time-b.time);
   renderList();
@@ -447,7 +568,7 @@ function sortTimeline() {
 
 function addRow() {
   const lastT = timeline.length ? timeline[timeline.length-1].time+5 : 0;
-  timeline.push({ time:lastT, chord:'Cmaj7', active:[0,3,4] });
+  timeline.push({ time:lastT, chord:'Cmaj7', active:[0,4,7], annotation:'', carry:0 });
   renderList();
   document.getElementById('timeline-list').lastElementChild.scrollIntoView({behavior:'smooth'});
 }
@@ -483,15 +604,34 @@ function renderHUDChord(idx, flash=true) {
 
 function renderHUDDegrees(idx) {
   const item = timeline[idx];
+  const carry = item.carry || 0;
+
+  // collect degrees from previous carry chords
+  const prevActive = new Set();
+  for (let p = 1; p <= carry; p++) {
+    const pi = idx - p;
+    if (pi >= 0) (timeline[pi].active || []).forEach(d => prevActive.add(d));
+  }
+
   const row = document.getElementById('degree-row');
   row.innerHTML = '';
-  for (let d = 0; d < 7; d++) {
-    const on = item.active.includes(d);
+  for (let d = 0; d < 12; d++) {
+    const isCurrent = item.active.includes(d);
+    const isPrev    = !isCurrent && prevActive.has(d);
+    let cls = 'degree-box';
+    if (isCurrent) cls += ' active';
+    else if (isPrev) cls += ' prev';
     const div = document.createElement('div');
-    div.className = 'degree-box'+(on?' active':'');
+    div.className = cls;
     div.innerHTML = `<span class="deg-num">${d+1}</span><span class="deg-note">${globalNotes[d]||''}</span>`;
     row.appendChild(div);
   }
+
+  // annotation
+  const annEl = document.getElementById('chord-annotation');
+  const text = item.annotation || '';
+  annEl.textContent = text;
+  annEl.style.display = text ? 'block' : 'none';
 }
 
 function getCurrentIdx(t) {
@@ -518,17 +658,19 @@ function setProgress(pct,elapsed,total) {
   document.getElementById('progress-time').textContent=fmtTime(elapsed)+' / '+fmtTime(total);
 }
 
-// ── SYNC DOM → timeline (runs before preview/export) ──
+// ── SYNC DOM → timeline (before preview/export) ──
 function syncTimelineFromDOM() {
   document.querySelectorAll('#timeline-list .tl-item').forEach((row, i) => {
     if (i >= timeline.length) return;
-    const timeInput = row.querySelector('input[type="number"]');
-    const chordInput = row.querySelector('input[type="text"]');
+    const timeInput  = row.querySelector('input[type="number"]');
+    const chordInput = row.querySelector('.tl-col-chord input');
+    const annotInput = row.querySelector('.annotation-input');
     if (timeInput) {
       const val = parseFloat(timeInput.value);
       if (!isNaN(val)) timeline[i].time = val;
     }
     if (chordInput && chordInput.value) timeline[i].chord = chordInput.value;
+    if (annotInput) timeline[i].annotation = annotInput.value;
   });
   timeline.sort((a,b)=>a.time-b.time);
 }
@@ -635,27 +777,56 @@ function drawCanvas(ctx,idx,elapsed,total) {
   ctx.shadowColor='rgba(180,140,255,0.8)'; ctx.shadowBlur=40;
   ctx.fillText(item.chord,W/2,cy); ctx.shadowBlur=0;
 
-  // DEGREE BOXES
-  const boxW=80,boxH=80,gap=14;
-  const totalBoxW=7*boxW+6*gap;
+  // DEGREE BOXES (12)
+  const carry = item.carry || 0;
+  const prevActive = new Set();
+  for (let p = 1; p <= carry; p++) {
+    const pi = idx - p;
+    if (pi >= 0) (timeline[pi].active || []).forEach(d => prevActive.add(d));
+  }
+
+  const boxW=72,boxH=72,gap=10;
+  const totalBoxW=12*boxW+11*gap;
   const bx0=W/2-totalBoxW/2;
-  const by=cy+24+20; // margin-top:24px below chord
-  for(let d=0;d<7;d++){
+  const by=cy+20+20;
+  for(let d=0;d<12;d++){
     const bx=bx0+d*(boxW+gap);
-    const on=item.active.includes(d);
+    const isCurrent=item.active.includes(d);
+    const isPrev=!isCurrent&&prevActive.has(d);
     const note=globalNotes[d]||'';
-    ctx.fillStyle=on?'rgba(140,90,255,0.25)':'rgba(255,255,255,0.05)';
-    ctx.strokeStyle=on?'#b48cff':'rgba(255,255,255,0.15)';
-    ctx.lineWidth=on?1.5:1;
-    if(on){ctx.shadowColor='rgba(140,90,255,0.5)';ctx.shadowBlur=20;}
-    rrect(ctx,bx,by,boxW,boxH,10); ctx.fill(); ctx.stroke(); ctx.shadowBlur=0;
+
+    if(isCurrent){
+      ctx.fillStyle='rgba(140,90,255,0.25)';
+      ctx.strokeStyle='#b48cff'; ctx.lineWidth=1.5;
+      ctx.shadowColor='rgba(140,90,255,0.5)'; ctx.shadowBlur=18;
+    } else if(isPrev){
+      ctx.fillStyle='rgba(255,160,40,0.18)';
+      ctx.strokeStyle='#ffb83c'; ctx.lineWidth=1.5;
+      ctx.shadowColor='rgba(255,160,40,0.4)'; ctx.shadowBlur=14;
+    } else {
+      ctx.fillStyle='rgba(255,255,255,0.05)';
+      ctx.strokeStyle='rgba(255,255,255,0.15)'; ctx.lineWidth=1;
+      ctx.shadowBlur=0;
+    }
+    rrect(ctx,bx,by,boxW,boxH,9); ctx.fill(); ctx.stroke(); ctx.shadowBlur=0;
+
     ctx.textAlign='center';
-    ctx.font='700 14px "Space Mono"';
-    ctx.fillStyle=on?'rgba(255,255,255,0.5)':'rgba(255,255,255,0.28)';
-    ctx.fillText(String(d+1),bx+boxW/2,by+22);
-    ctx.font='700 22px "Space Mono"';
-    ctx.fillStyle=on?'#fff':'rgba(255,255,255,0.28)';
-    ctx.fillText(note,bx+boxW/2,by+56);
+    ctx.font='700 12px "Space Mono"';
+    ctx.fillStyle=isCurrent?'rgba(255,255,255,0.5)':isPrev?'rgba(255,200,100,0.6)':'rgba(255,255,255,0.28)';
+    ctx.fillText(String(d+1),bx+boxW/2,by+19);
+    ctx.font='700 19px "Space Mono"';
+    ctx.fillStyle=isCurrent?'#fff':isPrev?'#ffcc70':'rgba(255,255,255,0.28)';
+    ctx.fillText(note,bx+boxW/2,by+50);
+  }
+
+  // ANNOTATION
+  if(item.annotation){
+    ctx.textAlign='center';
+    ctx.font='400 22px "Noto Sans SC"';
+    ctx.fillStyle='rgba(255,255,255,0.65)';
+    ctx.shadowColor='rgba(180,130,255,0.5)'; ctx.shadowBlur=16;
+    ctx.fillText(item.annotation,W/2,by+boxH+30);
+    ctx.shadowBlur=0;
   }
 
   // PROGRESS
