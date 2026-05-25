@@ -387,8 +387,8 @@ body {
       <h3>和弦垂直位置</h3>
       <div id="pos-row">
         <label>上下位置（像素，从顶部）</label>
-        <input type="range" id="pos-slider" min="100" max="800" value="320" oninput="updatePos()">
-        <div id="pos-val">320 px</div>
+        <input type="range" id="pos-slider" min="100" max="800" value="190" oninput="updatePos()">
+        <div id="pos-val">190 px</div>
       </div>
     </div>
 
@@ -415,20 +415,21 @@ body {
 let globalNotes = ['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'];
 let accidental = 'flat';
 
-// Accidental positions (indices 1,3,6,8,10) — the 5 black keys
-const SHARP_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
-const FLAT_NAMES  = ['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'];
+// Degree labels for the 12 chromatic positions
+const FLAT_DEGREES  = ['1','b2','2','b3','3','4','b5','5','b6','6','b7','7'];
+const SHARP_DEGREES = ['1','#1','2','#2','3','4','#4','5','#5','6','#6','7'];
+let degreeLabels = FLAT_DEGREES.slice();
 
 // Remap from old 7-note Gb Major (Gb Ab Bb Cb Db Eb F) to 12-note chromatic
 // Gb=6, Ab=8, Bb=10, Cb=B=11, Db=1, Eb=3, F=5
 let timeline = [
-  { time:0,    chord:'BbMaj9', active:[10,11,1,3],  annotation:'', carry:0 },
-  { time:7,    chord:'C6',     active:[11,1,3],      annotation:'', carry:0 },
-  { time:13.5, chord:'Amin7',  active:[10,11,1],     annotation:'', carry:0 },
-  { time:20,   chord:'Dmin9',  active:[8,10,3],      annotation:'', carry:0 },
+  { time:0,    chord:'BbMaj9', active:[5],  annotation:'', carry:0 },
+  { time:7,    chord:'C6',     active:[7],  annotation:'', carry:1 },
+  { time:13.5, chord:'Amin7',  active:[4],  annotation:'', carry:2 },
+  { time:20,   chord:'Dmin9',  active:[9],  annotation:'', carry:3 },
 ];
 
-let vertPos = 320;
+let vertPos = 190;
 let rafId = null, startTime = null, isPlaying = false;
 let mediaRecorder = null, recordedChunks = [], exportTimerInt = null;
 let lastIdx = -1;
@@ -436,14 +437,7 @@ let lastIdx = -1;
 // ── ACCIDENTAL TOGGLE ──
 function setAccidental(type) {
   accidental = type;
-  const names = type === 'sharp' ? SHARP_NAMES : FLAT_NAMES;
-  // update only the 5 accidental positions
-  [1,3,6,8,10].forEach(i => { globalNotes[i] = names[i]; });
-  // update input fields
-  [1,3,6,8,10].forEach(i => {
-    const el = document.getElementById('ng-'+i);
-    if (el) el.value = globalNotes[i];
-  });
+  degreeLabels = type === 'sharp' ? SHARP_DEGREES.slice() : FLAT_DEGREES.slice();
   document.getElementById('acc-flat').classList.toggle('active', type==='flat');
   document.getElementById('acc-sharp').classList.toggle('active', type==='sharp');
   refreshAllHLGrids();
@@ -458,7 +452,7 @@ function renderNoteGrid() {
   for (let d = 0; d < 12; d++) {
     const cell = document.createElement('div');
     cell.className = 'note-cell' + (accPos.has(d) ? ' chromatic' : '');
-    cell.innerHTML = `<span class="nc-num">${d+1}</span>
+    cell.innerHTML = `<span class="nc-num">${degreeLabels[d]}</span>
       <input id="ng-${d}" value="${globalNotes[d]}" maxlength="4"
         onchange="globalNotes[${d}]=this.value.trim(); refreshAllHLGrids()">`;
     grid.appendChild(cell);
@@ -535,7 +529,7 @@ function renderHLGrid(i) {
     const on = timeline[i].active.includes(d);
     const cell = document.createElement('div');
     cell.className = 'hl-cell' + (on ? ' on' : '');
-    cell.innerHTML = `<span class="hl-num">${d+1}</span><span class="hl-note">${globalNotes[d]||''}</span>`;
+    cell.innerHTML = `<span class="hl-num">${degreeLabels[d]}</span><span class="hl-note">${globalNotes[d]||''}</span>`;
     cell.onclick = () => {
       const idx2 = timeline[i].active.indexOf(d);
       if (idx2 >= 0) timeline[i].active.splice(idx2,1);
@@ -623,7 +617,7 @@ function renderHUDDegrees(idx) {
     else if (isPrev) cls += ' prev';
     const div = document.createElement('div');
     div.className = cls;
-    div.innerHTML = `<span class="deg-num">${d+1}</span><span class="deg-note">${globalNotes[d]||''}</span>`;
+    div.innerHTML = `<span class="deg-num">${degreeLabels[d]}</span><span class="deg-note">${globalNotes[d]||''}</span>`;
     row.appendChild(div);
   }
 
@@ -813,7 +807,7 @@ function drawCanvas(ctx,idx,elapsed,total) {
     ctx.textAlign='center';
     ctx.font='700 12px "Space Mono"';
     ctx.fillStyle=isCurrent?'rgba(255,255,255,0.5)':isPrev?'rgba(255,200,100,0.6)':'rgba(255,255,255,0.28)';
-    ctx.fillText(String(d+1),bx+boxW/2,by+19);
+    ctx.fillText(degreeLabels[d],bx+boxW/2,by+19);
     ctx.font='700 19px "Space Mono"';
     ctx.fillStyle=isCurrent?'#fff':isPrev?'#ffcc70':'rgba(255,255,255,0.28)';
     ctx.fillText(note,bx+boxW/2,by+50);
