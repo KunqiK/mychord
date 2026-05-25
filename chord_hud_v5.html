@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>Chord HUD v5</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Noto+Sans+SC:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  width:1920px; height:1080px;
+  background:#000; overflow:hidden;
+  font-family:'Space Mono',monospace; color:#fff;
+  position:relative;
+}
+
+/* TOP LEFT */
+#top-left { position:absolute; top:36px; left:48px; }
+#bpm-key {
+  font-size:28px; font-weight:700; letter-spacing:2px; color:#e8e0ff;
+  text-shadow:0 0 20px rgba(160,120,255,0.6); line-height:1.3;
+}
+#bpm-key .sep { color:rgba(255,255,255,0.25); margin:0 10px; }
+#bpm-key .val { color:#c8b4ff; }
+
+/* TOP RIGHT */
+#top-right { position:absolute; top:24px; right:48px; text-align:right; }
+#song-title {
+  font-size:30px; font-weight:700; letter-spacing:1px;
+  color:#d4b8ff;
+  text-shadow:0 0 24px rgba(180,130,255,0.7);
+}
+#song-meta {
+  margin-top:8px;
+  font-family:'Noto Sans SC',sans-serif;
+  font-size:19px; color:rgba(255,255,255,0.5); line-height:1.9;
+}
+#song-meta span { color:rgba(255,255,255,0.9); }
+
+/* CHORD DISPLAY CONTAINER */
+#hud-center {
+  position:absolute;
+  left:50%; transform:translateX(-50%);
+  text-align:center;
+  white-space:nowrap;
+}
+#chord-display {
+  display:flex; align-items:baseline; justify-content:center; gap:0;
+  line-height:1;
+}
+.cd-chord-current {
+  font-size:120px; font-weight:700; letter-spacing:-2px; color:#fff; line-height:1;
+  text-shadow:0 0 40px rgba(180,140,255,0.8), 0 0 80px rgba(160,100,255,0.4);
+}
+.cd-chord-current.flash { animation:chordFlash 0.3s ease-out; }
+@keyframes chordFlash {
+  0%   { transform:scale(1.06); opacity:0.6; }
+  100% { transform:scale(1);    opacity:1; }
+}
+.cd-chord-other {
+  font-size:44px; font-weight:700; letter-spacing:-1px;
+  color:rgba(255,255,255,0.4); line-height:1;
+}
+.cd-sep {
+  font-size:36px; color:rgba(255,255,255,0.2);
+  padding:0 14px; align-self:center;
+}
+
+#degree-row {
+  display:flex; gap:10px; justify-content:center;
+  margin-top:20px;
+}
+.degree-box {
+  width:72px; height:72px; border-radius:9px;
+  border:1.5px solid rgba(255,255,255,0.15);
+  background:rgba(255,255,255,0.05);
+  display:flex; flex-direction:column;
+  align-items:center; justify-content:center; gap:3px;
+  transition:all 0.2s ease;
+}
+/* current chord — purple */
+.degree-box.active {
+  border-color:#b48cff;
+  background:rgba(140,90,255,0.25);
+  box-shadow:0 0 18px rgba(140,90,255,0.5), inset 0 0 10px rgba(140,90,255,0.15);
+}
+/* previous chord carry — amber */
+.degree-box.prev {
+  border-color:#ffb83c;
+  background:rgba(255,160,40,0.18);
+  box-shadow:0 0 14px rgba(255,160,40,0.4), inset 0 0 8px rgba(255,160,40,0.1);
+}
+.deg-num { font-size:12px; font-weight:700; color:rgba(255,255,255,0.28); line-height:1; }
+.degree-box.active .deg-num { color:rgba(255,255,255,0.5); }
+.degree-box.prev .deg-num { color:rgba(255,200,100,0.6); }
+.deg-note { font-size:19px; font-weight:700; color:rgba(255,255,255,0.28); line-height:1; }
+.degree-box.active .deg-note { color:#fff; }
+.degree-box.prev .deg-note { color:#ffcc70; }
+
+/* chord annotation */
+#chord-annotation {
+  margin-top:14px;
+  font-family:'Noto Sans SC',sans-serif;
+  font-size:22px; font-style:italic;
+  color:rgba(255,255,255,0.65);
+  text-shadow:0 0 16px rgba(180,130,255,0.5);
+  letter-spacing:0.5px;
+  display:none;
+}
+
+/* PROGRESS */
+#progress-container {
+  position:absolute; bottom:0; left:0; right:0;
+  height:6px; background:rgba(255,255,255,0.08);
+  cursor:pointer;
+}
+#progress-bar {
+  height:100%;
+  background:linear-gradient(90deg,#8c5aff,#ff9f6a);
+  width:0%;
+  box-shadow:0 0 10px rgba(140,90,255,0.6);
+  position:relative;
+}
+#progress-bar::after {
+  content:''; position:absolute; right:-1px; top:-3px;
+  width:12px; height:12px; border-radius:50%;
+  background:#fff; box-shadow:0 0 8px rgba(140,90,255,0.8);
+}
+#progress-time {
+  position:absolute; bottom:16px; right:48px;
+  font-size:14px; color:rgba(255,255,255,0.35); letter-spacing:1px;
+}
+
+/* ── EDITOR ── */
+#editor {
+  position:fixed; top:0; left:0; right:0; bottom:0;
+  background:rgba(6,4,16,0.97); z-index:100;
+  display:flex; flex-direction:column;
+  font-family:'Noto Sans SC',sans-serif; overflow:hidden;
+}
+#editor-header {
+  padding:16px 24px 12px;
+  border-bottom:1px solid rgba(255,255,255,0.08);
+  display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+}
+#editor-header h2 {
+  font-family:'Space Mono',monospace; font-size:12px;
+  color:rgba(255,255,255,0.35); letter-spacing:3px; font-weight:400;
+}
+.hbtn {
+  padding:7px 16px; border-radius:8px; font-size:12px; cursor:pointer;
+  font-family:'Space Mono',monospace; border:1px solid; transition:all 0.15s;
+}
+.hbtn-purple { background:rgba(140,90,255,0.2); border-color:rgba(140,90,255,0.45); color:#c8b4ff; }
+.hbtn-purple:hover { background:rgba(140,90,255,0.35); }
+.hbtn-orange { background:rgba(255,140,80,0.2); border-color:rgba(255,140,80,0.45); color:#ffb890; }
+.hbtn-orange:hover { background:rgba(255,140,80,0.35); }
+.hint-text { font-size:11px; color:rgba(255,255,255,0.2); font-family:'Space Mono',monospace; line-height:1.6; }
+
+#editor-body { display:flex; flex:1; overflow:hidden; }
+
+/* LEFT panel */
+#panel-left {
+  width:300px; padding:18px; border-right:1px solid rgba(255,255,255,0.08);
+  overflow-y:auto; display:flex; flex-direction:column; gap:12px;
+}
+#panel-left h3, #panel-right h3 {
+  font-size:10px; color:rgba(255,255,255,0.28); letter-spacing:2px;
+  text-transform:uppercase; font-family:'Space Mono',monospace;
+}
+.field-row { display:flex; flex-direction:column; gap:3px; }
+.field-row label { font-size:11px; color:rgba(255,255,255,0.32); }
+.field-row input {
+  background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1);
+  border-radius:6px; color:#fff; font-size:13px; padding:5px 9px; outline:none; width:100%;
+  font-family:'Space Mono',monospace;
+}
+.field-row input:focus { border-color:rgba(140,90,255,0.5); background:rgba(140,90,255,0.07); }
+.apply-btn {
+  padding:7px 0; border-radius:6px; font-size:12px; cursor:pointer;
+  font-family:'Space Mono',monospace; border:1px solid;
+  background:rgba(140,90,255,0.15); border-color:rgba(140,90,255,0.35); color:#c8b4ff;
+  transition:all 0.15s; width:100%;
+}
+.apply-btn:hover { background:rgba(140,90,255,0.3); }
+.divider { height:1px; background:rgba(255,255,255,0.07); margin:2px 0; }
+
+/* accidental toggle */
+.acc-row {
+  display:flex; gap:6px;
+}
+.acc-btn {
+  flex:1; padding:5px 0; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer;
+  font-family:'Space Mono',monospace; border:1px solid rgba(255,255,255,0.12);
+  background:rgba(255,255,255,0.04); color:rgba(255,255,255,0.4); transition:all 0.15s;
+}
+.acc-btn.active { background:rgba(140,90,255,0.25); border-color:#b48cff; color:#fff; }
+.acc-btn:hover:not(.active) { background:rgba(255,255,255,0.08); }
+
+/* Note name grid — 6 columns × 2 rows = 12 */
+#note-grid {
+  display:grid; grid-template-columns:repeat(6,1fr); gap:5px;
+}
+.note-cell {
+  display:flex; flex-direction:column; align-items:center; gap:3px;
+  padding:5px 2px; border-radius:6px;
+  background:rgba(140,90,255,0.1); border:1px solid rgba(140,90,255,0.25);
+}
+.note-cell.chromatic {
+  background:rgba(255,160,40,0.08); border-color:rgba(255,160,40,0.3);
+}
+.note-cell .nc-num { font-size:9px; color:rgba(255,255,255,0.35); font-family:'Space Mono',monospace; }
+.note-cell input {
+  width:100%; background:transparent; border:none; border-bottom:1px solid rgba(255,255,255,0.15);
+  color:#fff; font-family:'Space Mono',monospace; font-size:11px; font-weight:700;
+  text-align:center; outline:none; padding:2px 0;
+}
+.note-cell input:focus { border-bottom-color:#b48cff; }
+
+/* Vertical position slider */
+#pos-row { display:flex; flex-direction:column; gap:5px; }
+#pos-row label { font-size:11px; color:rgba(255,255,255,0.32); }
+#pos-slider { width:100%; accent-color:#b48cff; }
+#pos-val { font-size:11px; color:rgba(255,255,255,0.4); font-family:'Space Mono',monospace; text-align:right; }
+
+/* RIGHT panel */
+#panel-right {
+  flex:1; padding:18px; overflow-y:auto; display:flex; flex-direction:column; gap:10px;
+}
+.dur-row { display:flex; align-items:center; gap:10px; }
+.dur-row label { font-size:12px; color:rgba(255,255,255,0.38); }
+.dur-row input {
+  width:68px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1);
+  border-radius:6px; color:#fff; font-size:13px; padding:4px 8px; outline:none;
+  font-family:'Space Mono',monospace;
+}
+.dur-row input:focus { border-color:rgba(140,90,255,0.5); }
+.dur-row span { font-size:11px; color:rgba(255,255,255,0.2); }
+
+#timeline-list { display:flex; flex-direction:column; gap:7px; }
+
+/* timeline item — flex column */
+.tl-item {
+  display:flex; flex-direction:column; gap:8px;
+  background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.07);
+  border-radius:8px; padding:10px 12px;
+  transition:border-color 0.2s;
+}
+.tl-item.tl-active { border-color:rgba(140,90,255,0.45); background:rgba(140,90,255,0.07); }
+
+/* top row inside each timeline item */
+.tl-top-row {
+  display:flex; gap:8px; align-items:flex-end;
+}
+.tl-col { display:flex; flex-direction:column; gap:3px; }
+.tl-col-time { width:72px; }
+.tl-col-chord { width:110px; }
+.tl-col-carry { display:flex; flex-direction:column; gap:3px; }
+.tl-col-group { width:60px; }
+
+.tl-item input[type="number"], .tl-item input[type="text"] {
+  background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1);
+  border-radius:5px; color:#fff; font-size:12px; padding:5px 7px; outline:none;
+  font-family:'Space Mono',monospace; width:100%;
+}
+.tl-item input:focus { border-color:rgba(140,90,255,0.4); }
+.col-label { font-size:10px; color:rgba(255,255,255,0.25); margin-bottom:1px; display:block; }
+
+/* carry control */
+.carry-ctrl {
+  display:flex; align-items:center; gap:4px;
+}
+.carry-btn {
+  width:22px; height:22px; border-radius:4px;
+  border:1px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.05);
+  color:rgba(255,255,255,0.5); cursor:pointer; font-size:14px; line-height:1;
+  display:flex; align-items:center; justify-content:center; transition:all 0.12s;
+  font-family:'Space Mono',monospace;
+}
+.carry-btn:hover { background:rgba(255,180,60,0.2); border-color:#ffb83c; color:#ffcc70; }
+.carry-val {
+  font-size:13px; font-weight:700; color:#ffcc70; font-family:'Space Mono',monospace;
+  min-width:14px; text-align:center;
+}
+
+/* highlight grid — 6 columns × 2 rows = 12 */
+.hl-grid {
+  display:grid; grid-template-columns:repeat(6,1fr); gap:4px;
+}
+.hl-cell {
+  display:flex; flex-direction:column; align-items:center; gap:2px;
+  padding:4px 2px; border-radius:5px; cursor:pointer;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(255,255,255,0.03);
+  transition:all 0.15s; user-select:none;
+}
+.hl-cell:hover { border-color:rgba(180,140,255,0.3); background:rgba(140,90,255,0.1); }
+.hl-cell.on { border-color:#b48cff; background:rgba(140,90,255,0.25); }
+.hl-num { font-size:8px; color:rgba(255,255,255,0.28); font-family:'Space Mono',monospace; }
+.hl-cell.on .hl-num { color:rgba(255,255,255,0.55); }
+.hl-note { font-size:10px; font-weight:700; color:rgba(255,255,255,0.28); font-family:'Space Mono',monospace; }
+.hl-cell.on .hl-note { color:#fff; }
+
+/* annotation input */
+.annotation-input {
+  width:100%; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08);
+  border-radius:5px; color:rgba(255,255,255,0.75); font-size:12px; padding:5px 8px; outline:none;
+  font-family:'Noto Sans SC',sans-serif; font-style:italic;
+}
+.annotation-input:focus { border-color:rgba(255,180,60,0.4); background:rgba(255,160,40,0.05); }
+.annotation-input::placeholder { color:rgba(255,255,255,0.18); font-style:italic; }
+
+.tl-del {
+  width:30px; height:30px; border-radius:6px;
+  border:1px solid rgba(220,80,80,0.3); background:rgba(220,80,80,0.1);
+  color:rgba(255,100,100,0.7); cursor:pointer; font-size:14px;
+  display:flex; align-items:center; justify-content:center; transition:all 0.15s;
+  flex-shrink:0; margin-left:auto;
+}
+.tl-del:hover { background:rgba(220,80,80,0.25); color:#ff8888; }
+
+#add-row-btn {
+  display:flex; align-items:center; justify-content:center;
+  padding:9px; border-radius:8px;
+  border:1px dashed rgba(255,255,255,0.13); background:transparent;
+  color:rgba(255,255,255,0.28); font-size:13px; cursor:pointer;
+  font-family:'Noto Sans SC',sans-serif; transition:all 0.15s;
+}
+#add-row-btn:hover { border-color:rgba(140,90,255,0.35); color:rgba(180,140,255,0.7); }
+
+#export-status {
+  position:fixed; bottom:20px; right:20px;
+  background:rgba(10,6,24,0.95); border:1px solid rgba(140,90,255,0.3);
+  border-radius:12px; padding:12px 18px;
+  font-family:'Space Mono',monospace; font-size:13px; color:#c8b4ff;
+  z-index:200; display:none;
+}
+#export-status.visible { display:block; }
+</style>
+</head>
+<body>
+
+<!-- HUD -->
+<div id="top-left">
+  <div id="bpm-key">
+    BPM <span class="val" id="disp-bpm">191</span>
+    <span class="sep">|</span>
+    Key = <span class="val" id="disp-key">Gb Major</span>
+  </div>
+</div>
+
+<div id="top-right">
+  <div id="song-title">eclosion</div>
+  <div id="song-meta">
+    编曲：<span id="disp-composer">Feryquitous</span><br>
+    人声：<span id="disp-vocalist">BΣretta Crossrain</span><span id="release-line" style="display:none"><br>发布：<span id="disp-release"></span></span>
+  </div>
+</div>
+
+<div id="hud-center">
+  <div id="chord-display"></div>
+  <div id="degree-row"></div>
+  <div id="chord-annotation"></div>
+</div>
+
+<div id="progress-container"><div id="progress-bar"></div></div>
+<div id="progress-time">0:00 / 0:00</div>
+
+<!-- EDITOR -->
+<div id="editor">
+  <div id="editor-header">
+    <h2>CHORD HUD v5</h2>
+    <button class="hbtn hbtn-purple" onclick="previewHUD()">▶ 预览</button>
+    <button class="hbtn hbtn-orange" onclick="startExport()">⬇ Export WebM</button>
+    <div style="flex:1"></div>
+    <div class="hint-text">导出后叠加模式选 <strong style="color:rgba(255,255,255,0.45)">Screen</strong></div>
+  </div>
+  <div id="editor-body">
+
+    <!-- LEFT -->
+    <div id="panel-left">
+      <h3>基本信息</h3>
+      <div class="field-row"><label>BPM</label><input id="in-bpm" value="191"></div>
+      <div class="field-row"><label>Key</label><input id="in-key" value="Gb Major"></div>
+      <div class="divider"></div>
+      <div class="field-row"><label>曲名</label><input id="in-title" value="eclosion"></div>
+      <div class="field-row"><label>编曲</label><input id="in-composer" value="Feryquitous"></div>
+      <div class="field-row"><label>人声</label><input id="in-vocalist" value="BΣretta Crossrain"></div>
+      <div class="field-row"><label>发布时间</label><input id="in-release" value="" placeholder="如：2022.03.16"></div>
+      <button class="apply-btn" onclick="applyStatic()">应用基本信息</button>
+
+      <div class="divider"></div>
+      <h3>音名（12个半音，全局）</h3>
+      <div class="acc-row">
+        <button class="acc-btn" id="acc-flat" onclick="setAccidental('flat')">♭ 降记号</button>
+        <button class="acc-btn" id="acc-sharp" onclick="setAccidental('sharp')">♯ 升记号</button>
+      </div>
+      <div id="note-grid"></div>
+      <button class="apply-btn" onclick="applyNotes()">应用音名</button>
+
+      <div class="divider"></div>
+      <h3>和弦垂直位置</h3>
+      <div id="pos-row">
+        <label>上下位置（像素，从顶部）</label>
+        <input type="range" id="pos-slider" min="100" max="800" value="190" oninput="updatePos()">
+        <div id="pos-val">190 px</div>
+      </div>
+    </div>
+
+    <!-- RIGHT -->
+    <div id="panel-right">
+      <h3>和弦时间轴</h3>
+      <div class="dur-row">
+        <label>总时长（秒）</label>
+        <input id="in-total" type="number" min="1" value="30">
+        <span>秒</span>
+      </div>
+      <div id="timeline-list"></div>
+      <button id="add-row-btn" onclick="addRow()">＋ 添加和弦</button>
+    </div>
+
+  </div>
+</div>
+
+<div id="export-status">⏺ 导出中… <span id="export-timer">0s</span></div>
+
+<script>
+// 12 chromatic note names (flat default)
+let globalNotes = ['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'];
+let accidental = 'flat';
+
+const FLAT_DEGREES  = ['1','b2','2','b3','3','4','b5','5','b6','6','b7','7'];
+const SHARP_DEGREES = ['1','#1','2','#2','3','4','#4','5','#5','6','#6','7'];
+let degreeLabels = FLAT_DEGREES.slice();
+
+let timeline = [
+  { time:0,    chord:'BbMaj9', active:[5],  annotation:'', carry:0, group:'' },
+  { time:7,    chord:'C6',     active:[7],  annotation:'', carry:1, group:'' },
+  { time:13.5, chord:'Amin7',  active:[4],  annotation:'', carry:2, group:'' },
+  { time:20,   chord:'Dmin9',  active:[9],  annotation:'', carry:3, group:'' },
+];
+
+let vertPos = 190;
+let rafId = null, startTime = null, isPlaying = false;
+let mediaRecorder = null, recordedChunks = [], exportTimerInt = null;
+let lastIdx = -1;
+
+// ── ACCIDENTAL TOGGLE ──
+function setAccidental(type) {
+  accidental = type;
+  degreeLabels = type === 'sharp' ? SHARP_DEGREES.slice() : FLAT_DEGREES.slice();
+  document.getElementById('acc-flat').classList.toggle('active', type==='flat');
+  document.getElementById('acc-sharp').classList.toggle('active', type==='sharp');
+  refreshAllHLGrids();
+}
+
+// ── NOTE GRID (12 cells) ──
+function renderNoteGrid() {
+  const grid = document.getElementById('note-grid');
+  grid.innerHTML = '';
+  const accPos = new Set([1,3,6,8,10]);
+  for (let d = 0; d < 12; d++) {
+    const cell = document.createElement('div');
+    cell.className = 'note-cell' + (accPos.has(d) ? ' chromatic' : '');
+    cell.innerHTML = `<span class="nc-num">${degreeLabels[d]}</span>
+      <input id="ng-${d}" value="${globalNotes[d]}" maxlength="4"
+        onchange="globalNotes[${d}]=this.value.trim(); refreshAllHLGrids()">`;
+    grid.appendChild(cell);
+  }
+  document.getElementById('acc-flat').classList.toggle('active', accidental==='flat');
+  document.getElementById('acc-sharp').classList.toggle('active', accidental==='sharp');
+}
+
+function applyNotes() {
+  for (let d = 0; d < 12; d++) {
+    const el = document.getElementById('ng-'+d);
+    if (el) globalNotes[d] = el.value.trim() || globalNotes[d];
+  }
+  refreshAllHLGrids();
+  renderHUDDegrees(getCurrentIdx());
+}
+
+function refreshAllHLGrids() {
+  timeline.forEach((_,i) => renderHLGrid(i));
+  renderHUDDegrees(getCurrentIdx());
+}
+
+// ── TIMELINE LIST ──
+function renderList() {
+  const list = document.getElementById('timeline-list');
+  list.innerHTML = '';
+  timeline.forEach((item, i) => {
+    const div = document.createElement('div');
+    div.className = 'tl-item';
+    div.id = 'tl-'+i;
+    div.innerHTML = `
+      <div class="tl-top-row">
+        <div class="tl-col tl-col-time">
+          <span class="col-label">时间(s)</span>
+          <input type="number" min="0" step="0.1" value="${item.time}"
+            onchange="timeline[${i}].time=parseFloat(this.value)||0; sortTimeline()">
+        </div>
+        <div class="tl-col tl-col-chord">
+          <span class="col-label">和弦名</span>
+          <input type="text" value="${item.chord}"
+            onchange="timeline[${i}].chord=this.value; if(getCurrentIdx()===${i}) renderChordDisplay(${i},false)">
+        </div>
+        <div class="tl-col-carry">
+          <span class="col-label">承接前</span>
+          <div class="carry-ctrl">
+            <button class="carry-btn" onclick="changeCarry(${i},-1)">−</button>
+            <span class="carry-val" id="carry-val-${i}">${item.carry||0}</span>
+            <button class="carry-btn" onclick="changeCarry(${i},1)">+</button>
+          </div>
+        </div>
+        <div class="tl-col tl-col-group">
+          <span class="col-label">分组</span>
+          <input type="text" class="group-input" value="${item.group||''}" maxlength="8"
+            onchange="timeline[${i}].group=this.value.trim()">
+        </div>
+        <button class="tl-del" onclick="removeRow(${i})">✕</button>
+      </div>
+      <div>
+        <span class="col-label">高亮音级（点击切换）</span>
+        <div class="hl-grid" id="hl-${i}"></div>
+      </div>
+      <div>
+        <span class="col-label">解说</span>
+        <input type="text" class="annotation-input" value="${item.annotation||''}"
+          placeholder="和弦分析、功能标注…"
+          onchange="timeline[${i}].annotation=this.value; if(getCurrentIdx()===${i}) updateAnnotation(${i})">
+      </div>`;
+    list.appendChild(div);
+    renderHLGrid(i);
+  });
+}
+
+function renderHLGrid(i) {
+  const grid = document.getElementById('hl-'+i);
+  if (!grid) return;
+  grid.innerHTML = '';
+  for (let d = 0; d < 12; d++) {
+    const on = timeline[i].active.includes(d);
+    const cell = document.createElement('div');
+    cell.className = 'hl-cell' + (on ? ' on' : '');
+    cell.innerHTML = `<span class="hl-num">${degreeLabels[d]}</span><span class="hl-note">${globalNotes[d]||''}</span>`;
+    cell.onclick = () => {
+      const idx2 = timeline[i].active.indexOf(d);
+      if (idx2 >= 0) timeline[i].active.splice(idx2,1);
+      else timeline[i].active.push(d);
+      renderHLGrid(i);
+      if (getCurrentIdx() === i) renderHUDDegrees(i);
+    };
+    grid.appendChild(cell);
+  }
+}
+
+function changeCarry(i, delta) {
+  timeline[i].carry = Math.max(0, Math.min(4, (timeline[i].carry||0) + delta));
+  const el = document.getElementById('carry-val-'+i);
+  if (el) el.textContent = timeline[i].carry;
+  if (getCurrentIdx() === i) renderHUDDegrees(i);
+}
+
+function updateAnnotation(i) {
+  const el = document.getElementById('chord-annotation');
+  const text = timeline[i].annotation || '';
+  el.textContent = text;
+  el.style.display = text ? 'block' : 'none';
+}
+
+function sortTimeline() {
+  timeline.sort((a,b)=>a.time-b.time);
+  renderList();
+}
+
+function addRow() {
+  const lastT = timeline.length ? timeline[timeline.length-1].time+5 : 0;
+  timeline.push({ time:lastT, chord:'Cmaj7', active:[0,4,7], annotation:'', carry:0, group:'' });
+  renderList();
+  document.getElementById('timeline-list').lastElementChild.scrollIntoView({behavior:'smooth'});
+}
+
+function removeRow(i) {
+  if (timeline.length<=1) return;
+  timeline.splice(i,1);
+  renderList();
+}
+
+// ── VERTICAL POSITION ──
+function updatePos() {
+  vertPos = parseInt(document.getElementById('pos-slider').value);
+  document.getElementById('pos-val').textContent = vertPos + ' px';
+  document.getElementById('hud-center').style.top = vertPos + 'px';
+}
+
+// ── STATIC INFO ──
+function applyStatic() {
+  document.getElementById('disp-bpm').textContent = document.getElementById('in-bpm').value;
+  document.getElementById('disp-key').textContent = document.getElementById('in-key').value;
+  document.getElementById('song-title').textContent = document.getElementById('in-title').value;
+  document.getElementById('disp-composer').textContent = document.getElementById('in-composer').value;
+  document.getElementById('disp-vocalist').textContent = document.getElementById('in-vocalist').value;
+  const release = document.getElementById('in-release').value.trim();
+  const releaseLine = document.getElementById('release-line');
+  document.getElementById('disp-release').textContent = release;
+  releaseLine.style.display = release ? '' : 'none';
+}
+
+// ── CHORD DISPLAY (replaces renderHUDChord) ──
+function renderChordDisplay(idx, flash=true) {
+  const item = timeline[idx];
+  const container = document.getElementById('chord-display');
+  const group = (item.group || '').trim();
+
+  if (!group) {
+    container.innerHTML = `<span class="cd-chord-current">${item.chord}</span>`;
+  } else {
+    const members = timeline
+      .filter(t => (t.group || '').trim() === group)
+      .sort((a,b) => a.time - b.time);
+    let html = '';
+    members.forEach((m, mi) => {
+      if (mi > 0) html += `<span class="cd-sep">/</span>`;
+      const isCur = m === item;
+      html += `<span class="${isCur ? 'cd-chord-current' : 'cd-chord-other'}">${m.chord}</span>`;
+    });
+    container.innerHTML = html;
+  }
+
+  if (flash) {
+    const cur = container.querySelector('.cd-chord-current');
+    if (cur) { cur.classList.remove('flash'); void cur.offsetWidth; cur.classList.add('flash'); }
+  }
+}
+
+// ── HUD DEGREES ──
+function renderHUDDegrees(idx) {
+  const item = timeline[idx];
+  const carry = item.carry || 0;
+
+  const prevActive = new Set();
+  for (let p = 1; p <= carry; p++) {
+    const pi = idx - p;
+    if (pi >= 0) (timeline[pi].active || []).forEach(d => prevActive.add(d));
+  }
+
+  const row = document.getElementById('degree-row');
+  row.innerHTML = '';
+  for (let d = 0; d < 12; d++) {
+    const isCurrent = item.active.includes(d);
+    const isPrev    = !isCurrent && prevActive.has(d);
+    let cls = 'degree-box';
+    if (isCurrent) cls += ' active';
+    else if (isPrev) cls += ' prev';
+    const div = document.createElement('div');
+    div.className = cls;
+    div.innerHTML = `<span class="deg-num">${degreeLabels[d]}</span><span class="deg-note">${globalNotes[d]||''}</span>`;
+    row.appendChild(div);
+  }
+
+  const annEl = document.getElementById('chord-annotation');
+  const text = item.annotation || '';
+  annEl.textContent = text;
+  annEl.style.display = text ? 'block' : 'none';
+}
+
+function getCurrentIdx(t) {
+  if (t===undefined) return Math.max(0, lastIdx);
+  let idx=0;
+  for (let i=0;i<timeline.length;i++) { if(t>=timeline[i].time) idx=i; }
+  return idx;
+}
+
+function applyFrame(idx, flash=true) {
+  if (idx!==lastIdx) {
+    renderChordDisplay(idx, flash && lastIdx>=0);
+    renderHUDDegrees(idx);
+    document.querySelectorAll('.tl-item').forEach((el,i)=>el.classList.toggle('tl-active',i===idx));
+    lastIdx=idx;
+  }
+}
+
+function fmtTime(s) {
+  return `${Math.floor(s/60)}:${Math.floor(s%60).toString().padStart(2,'0')}`;
+}
+function setProgress(pct,elapsed,total) {
+  document.getElementById('progress-bar').style.width=(pct*100)+'%';
+  document.getElementById('progress-time').textContent=fmtTime(elapsed)+' / '+fmtTime(total);
+}
+
+// ── SYNC DOM → timeline (before preview/export) ──
+function syncTimelineFromDOM() {
+  document.querySelectorAll('#timeline-list .tl-item').forEach((row, i) => {
+    if (i >= timeline.length) return;
+    const timeInput  = row.querySelector('input[type="number"]');
+    const chordInput = row.querySelector('.tl-col-chord input');
+    const annotInput = row.querySelector('.annotation-input');
+    const groupInput = row.querySelector('.group-input');
+    if (timeInput) {
+      const val = parseFloat(timeInput.value);
+      if (!isNaN(val)) timeline[i].time = val;
+    }
+    if (chordInput && chordInput.value) timeline[i].chord = chordInput.value;
+    if (annotInput) timeline[i].annotation = annotInput.value;
+    if (groupInput) timeline[i].group = groupInput.value.trim();
+  });
+  timeline.sort((a,b)=>a.time-b.time);
+}
+
+// ── PREVIEW ──
+function previewHUD() {
+  applyStatic();
+  syncTimelineFromDOM();
+  const total=parseFloat(document.getElementById('in-total').value)||30;
+  document.getElementById('editor').style.display='none';
+  lastIdx=-1; startTime=null; isPlaying=true;
+  const stopFn=()=>{ cancelAnimationFrame(rafId); isPlaying=false; document.getElementById('editor').style.display='flex'; document.removeEventListener('keydown',stopFn); };
+  document.addEventListener('keydown',stopFn);
+  function tick(ts) {
+    if(!startTime) startTime=ts;
+    const elapsed=(ts-startTime)/1000;
+    if(elapsed>=total){setProgress(1,total,total);applyFrame(timeline.length-1);return;}
+    setProgress(elapsed/total,elapsed,total);
+    applyFrame(getCurrentIdx(elapsed));
+    rafId=requestAnimationFrame(tick);
+  }
+  rafId=requestAnimationFrame(tick);
+}
+
+// ── EXPORT ──
+function startExport() {
+  const total=parseFloat(document.getElementById('in-total').value)||30;
+  applyStatic();
+  syncTimelineFromDOM();
+  const canvas=document.createElement('canvas');
+  canvas.width=1920; canvas.height=1080;
+  const ctx=canvas.getContext('2d');
+  const mimeType=['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'].find(t=>MediaRecorder.isTypeSupported(t))||'video/webm';
+  recordedChunks=[];
+  const stream=canvas.captureStream(60);
+  mediaRecorder=new MediaRecorder(stream,{mimeType,videoBitsPerSecond:8_000_000});
+  mediaRecorder.ondataavailable=e=>{if(e.data.size>0)recordedChunks.push(e.data);};
+  mediaRecorder.onstop=()=>{
+    const blob=new Blob(recordedChunks,{type:'video/webm'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='chord_hud.webm'; a.click();
+    document.getElementById('export-status').classList.remove('visible');
+    document.getElementById('editor').style.display='flex';
+    clearInterval(exportTimerInt);
+  };
+  mediaRecorder.start(100);
+  document.getElementById('editor').style.display='none';
+  document.getElementById('export-status').classList.add('visible');
+  let sec=0;
+  exportTimerInt=setInterval(()=>{sec++;document.getElementById('export-timer').textContent=sec+'s';},1000);
+
+  document.fonts.ready.then(()=>{
+    lastIdx=-1;
+    let frameStart=null, lastFrame=0;
+    const FPS=60, frameDur=1000/FPS;
+    function drawLoop(ts) {
+      if(!frameStart) frameStart=ts;
+      const elapsed=(ts-frameStart)/1000;
+      if(elapsed>=total){ drawCanvas(ctx,timeline.length-1,total,total); mediaRecorder.stop(); return; }
+      if(ts-lastFrame>=frameDur-1){ lastFrame=ts; drawCanvas(ctx,getCurrentIdx(elapsed),elapsed,total); }
+      requestAnimationFrame(drawLoop);
+    }
+    requestAnimationFrame(drawLoop);
+  });
+}
+
+function drawCanvas(ctx,idx,elapsed,total) {
+  const item=timeline[idx];
+  const W=1920,H=1080;
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H);
+  ctx.textBaseline='alphabetic';
+
+  // BPM/KEY
+  const bpm=document.getElementById('in-bpm').value;
+  const key=document.getElementById('in-key').value;
+  ctx.textAlign='left';
+  ctx.font='700 28px "Space Mono"'; ctx.fillStyle='#e8e0ff';
+  ctx.fillText('BPM ',48,64);
+  let x=48+ctx.measureText('BPM ').width;
+  ctx.fillStyle='#c8b4ff'; ctx.fillText(bpm,x,64); x+=ctx.measureText(bpm).width;
+  ctx.fillStyle='rgba(255,255,255,0.25)'; ctx.fillText('  |  ',x,64); x+=ctx.measureText('  |  ').width;
+  ctx.fillStyle='#e8e0ff'; ctx.fillText('Key = ',x,64); x+=ctx.measureText('Key = ').width;
+  ctx.fillStyle='#c8b4ff'; ctx.fillText(key,x,64);
+
+  // TOP RIGHT
+  const title=document.getElementById('in-title').value;
+  const composer=document.getElementById('in-composer').value;
+  const vocalist=document.getElementById('in-vocalist').value;
+  const release=document.getElementById('in-release').value.trim();
+  ctx.textAlign='right';
+  ctx.font='700 30px "Space Mono"';
+  ctx.fillStyle='#d4b8ff';
+  ctx.shadowColor='rgba(180,130,255,0.7)'; ctx.shadowBlur=24;
+  ctx.fillText(title,W-48,62); ctx.shadowBlur=0;
+  ctx.font='400 19px "Noto Sans SC"';
+  ctx.fillStyle='rgba(255,255,255,0.5)';
+  ctx.fillText('编曲：'+composer,W-48,98);
+  ctx.fillText('人声：'+vocalist,W-48,134);
+  if (release) ctx.fillText('发布：'+release,W-48,170);
+
+  // CHORD — single or grouped
+  const group=(item.group||'').trim();
+  const cy=vertPos+110;
+
+  if (!group) {
+    ctx.textAlign='center';
+    ctx.font='700 120px "Space Mono"';
+    ctx.fillStyle='#fff';
+    ctx.shadowColor='rgba(180,140,255,0.8)'; ctx.shadowBlur=40;
+    ctx.fillText(item.chord,W/2,cy); ctx.shadowBlur=0;
+  } else {
+    const members=timeline
+      .filter(t=>(t.group||'').trim()===group)
+      .sort((a,b)=>a.time-b.time);
+
+    // Build piece list and measure widths
+    const SEP_PAD=28;
+    const pieces=[];
+    members.forEach((m,mi)=>{
+      if(mi>0) pieces.push({type:'sep'});
+      pieces.push({type:m===item?'current':'other',chord:m.chord});
+    });
+
+    ctx.textBaseline='alphabetic';
+    let totalW=0;
+    for(const p of pieces){
+      if(p.type==='sep'){
+        ctx.font='700 36px "Space Mono"';
+        p.w=ctx.measureText('/').width+SEP_PAD*2;
+      } else if(p.type==='current'){
+        ctx.font='700 120px "Space Mono"';
+        p.w=ctx.measureText(p.chord).width;
+      } else {
+        ctx.font='700 44px "Space Mono"';
+        p.w=ctx.measureText(p.chord).width;
+      }
+      totalW+=p.w;
+    }
+
+    let px=W/2-totalW/2;
+    ctx.textAlign='left';
+
+    for(const p of pieces){
+      if(p.type==='current'){
+        ctx.font='700 120px "Space Mono"';
+        ctx.fillStyle='#fff';
+        ctx.shadowColor='rgba(180,140,255,0.8)'; ctx.shadowBlur=40;
+        ctx.fillText(p.chord,px,cy);
+        ctx.shadowBlur=0;
+      } else if(p.type==='other'){
+        ctx.font='700 44px "Space Mono"';
+        ctx.fillStyle='rgba(255,255,255,0.4)';
+        ctx.fillText(p.chord,px,cy);
+      } else {
+        ctx.font='700 36px "Space Mono"';
+        ctx.fillStyle='rgba(255,255,255,0.2)';
+        ctx.fillText('/',px+SEP_PAD,cy);
+      }
+      px+=p.w;
+    }
+  }
+
+  // DEGREE BOXES (12)
+  const carry=item.carry||0;
+  const prevActive=new Set();
+  for(let p=1;p<=carry;p++){
+    const pi=idx-p;
+    if(pi>=0)(timeline[pi].active||[]).forEach(d=>prevActive.add(d));
+  }
+
+  const boxW=72,boxH=72,gap=10;
+  const totalBoxW=12*boxW+11*gap;
+  const bx0=W/2-totalBoxW/2;
+  const by=cy+20+20;
+  for(let d=0;d<12;d++){
+    const bx=bx0+d*(boxW+gap);
+    const isCurrent=item.active.includes(d);
+    const isPrev=!isCurrent&&prevActive.has(d);
+    const note=globalNotes[d]||'';
+
+    if(isCurrent){
+      ctx.fillStyle='rgba(140,90,255,0.25)';
+      ctx.strokeStyle='#b48cff'; ctx.lineWidth=1.5;
+      ctx.shadowColor='rgba(140,90,255,0.5)'; ctx.shadowBlur=18;
+    } else if(isPrev){
+      ctx.fillStyle='rgba(255,160,40,0.18)';
+      ctx.strokeStyle='#ffb83c'; ctx.lineWidth=1.5;
+      ctx.shadowColor='rgba(255,160,40,0.4)'; ctx.shadowBlur=14;
+    } else {
+      ctx.fillStyle='rgba(255,255,255,0.05)';
+      ctx.strokeStyle='rgba(255,255,255,0.15)'; ctx.lineWidth=1;
+      ctx.shadowBlur=0;
+    }
+    rrect(ctx,bx,by,boxW,boxH,9); ctx.fill(); ctx.stroke(); ctx.shadowBlur=0;
+
+    ctx.textAlign='center';
+    ctx.font='700 12px "Space Mono"';
+    ctx.fillStyle=isCurrent?'rgba(255,255,255,0.5)':isPrev?'rgba(255,200,100,0.6)':'rgba(255,255,255,0.28)';
+    ctx.fillText(degreeLabels[d],bx+boxW/2,by+19);
+    ctx.font='700 19px "Space Mono"';
+    ctx.fillStyle=isCurrent?'#fff':isPrev?'#ffcc70':'rgba(255,255,255,0.28)';
+    ctx.fillText(note,bx+boxW/2,by+50);
+  }
+
+  // ANNOTATION
+  if(item.annotation){
+    ctx.textAlign='center';
+    ctx.font='400 22px "Noto Sans SC"';
+    ctx.fillStyle='rgba(255,255,255,0.65)';
+    ctx.shadowColor='rgba(180,130,255,0.5)'; ctx.shadowBlur=16;
+    ctx.fillText(item.annotation,W/2,by+boxH+30);
+    ctx.shadowBlur=0;
+  }
+
+  // PROGRESS
+  const pct=elapsed/total;
+  ctx.fillStyle='rgba(255,255,255,0.08)'; ctx.fillRect(0,H-6,W,6);
+  const g=ctx.createLinearGradient(0,0,W,0);
+  g.addColorStop(0,'#8c5aff'); g.addColorStop(1,'#ff9f6a');
+  ctx.fillStyle=g; ctx.fillRect(0,H-6,W*pct,6);
+  ctx.textAlign='right'; ctx.font='400 14px "Space Mono"';
+  ctx.fillStyle='rgba(255,255,255,0.35)';
+  ctx.fillText(fmtTime(elapsed)+' / '+fmtTime(total),W-48,H-16);
+}
+
+function rrect(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);
+  ctx.quadraticCurveTo(x+w,y,x+w,y+r);ctx.lineTo(x+w,y+h-r);
+  ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);ctx.lineTo(x+r,y+h);
+  ctx.quadraticCurveTo(x,y+h,x,y+h-r);ctx.lineTo(x,y+r);
+  ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath();
+}
+
+// INIT
+renderNoteGrid();
+applyStatic();
+renderList();
+document.getElementById('hud-center').style.top=vertPos+'px';
+applyFrame(0,false);
+setProgress(0,0,parseFloat(document.getElementById('in-total').value)||30);
+
+// Progress bar scrubbing
+document.getElementById('progress-container').addEventListener('mousedown', function(e) {
+  if (!isPlaying) return;
+  const total = parseFloat(document.getElementById('in-total').value) || 30;
+  const rect = this.getBoundingClientRect();
+  const targetTime = Math.max(0, Math.min(total, ((e.clientX - rect.left) / rect.width) * total));
+  startTime = performance.now() - targetTime * 1000;
+  lastIdx = -1;
+});
+</script>
+</body>
+</html>
