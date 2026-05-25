@@ -1149,9 +1149,13 @@ function addRow() {
 }
 
 function removeRow(i) {
-  if (timeline.length<=1) return;
+  if (timeline.length <= 1) return;
+  const entry = timeline[i];
+  syncTimelineFromDOM();               // flush unsaved inputs (group, chord, annotation…)
+  const idx = timeline.indexOf(entry); // re-locate after potential sort
+  if (idx < 0) return;
   pushHistory();
-  timeline.splice(i,1);
+  timeline.splice(idx, 1);
   renderList();
 }
 
