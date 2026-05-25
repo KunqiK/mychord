@@ -135,3 +135,31 @@ Built on v7. Adds text paste import, MIDI file import, and undo/redo. **v7 was n
 | `ticksToSeconds(tick, tempoMap, tpb)` | Walks tempo segments to convert tick position to seconds. |
 | `detectChord(pitchClasses)` | Best-fit pitch-class template match; returns root+suffix string or `???`. |
 | `importMidiFile(input)` | Reads file as ArrayBuffer, calls parseMidi, groups notes, detects chords, appends. |
+
+---
+
+### chord_hud_v9.html
+Built on v8. Adds time signature preset buttons and fixes the delete bug. **v8 was not modified.**
+
+**Additional features over v8:**
+- **拍号快捷按钮**: Replaces the plain `每小节拍数` number input with a row of preset buttons (2/4, 3/4, 4/4✓, 5/4, 6/4, 7/4) plus a custom numeric field. `setTimeSig(n)` is the single update path; active button stays highlighted; loadProject and toggleTimingMode sync button state.
+- **拍数输入上限**: Beat input in bar mode now has `max="${beatsPerBar}"` to prevent overflow (e.g. beat 4 in a 3/4 bar).
+- **删除行 bug 修复**: `removeRow(i)` now calls `syncTimelineFromDOM()` first (capturing unsaved group/chord/annotation inputs), saves the entry reference, then re-locates it via `indexOf` after the sync+sort before splicing — prevents group data loss and wrong-entry deletion.
+
+**Key functions (v9 additions):**
+| Function | Purpose |
+|---|---|
+| `setTimeSig(n)` | Sets `beatsPerBar`, syncs number input, highlights active ts-btn, re-renders if in bars mode. |
+
+---
+
+### chord_hud_v10.html
+Built on v9. Adds MP4 export via WebCodecs + mp4-muxer. **v9 was not modified.**
+
+**Additional features over v9:**
+- **⬇ MP4 导出**: Encodes 1920×1080@60fps H.264 (avc1.640033, 8 Mbps) using the browser WebCodecs `VideoEncoder` API and muxes into MP4 via `mp4-muxer@5.2.2` (loaded via dynamic `import()` from jsDelivr CDN). Progress shown as percentage. Requires Chrome 94+ / Edge 94+. Falls back gracefully with an alert on unsupported browsers.
+
+**Key functions (v10 additions):**
+| Function | Purpose |
+|---|---|
+| `startExportMp4()` | Async: checks WebCodecs support, loads mp4-muxer, encodes all frames, downloads `.mp4`. |
