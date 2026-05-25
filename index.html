@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chord HUD — 和弦字幕叠加工具</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Noto+Sans+SC:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  min-height:100vh;
+  background:#07040f;
+  font-family:'Noto Sans SC',sans-serif;
+  color:#fff;
+  display:flex; flex-direction:column; align-items:center;
+  padding:60px 24px 80px;
+}
+
+.logo {
+  font-family:'Space Mono',monospace;
+  font-size:13px; letter-spacing:4px; font-weight:400;
+  color:rgba(255,255,255,0.25); text-transform:uppercase;
+  margin-bottom:32px;
+}
+
+h1 {
+  font-family:'Space Mono',monospace;
+  font-size:clamp(32px,5vw,56px); font-weight:700; letter-spacing:-1px;
+  color:#d4b8ff;
+  text-shadow:0 0 40px rgba(180,130,255,0.5), 0 0 80px rgba(160,100,255,0.2);
+  text-align:center; margin-bottom:16px;
+}
+
+.tagline {
+  font-size:clamp(14px,2vw,18px); color:rgba(255,255,255,0.45);
+  text-align:center; line-height:1.8; max-width:560px;
+  margin-bottom:48px;
+}
+
+.launch-btn {
+  display:inline-block;
+  padding:14px 40px; border-radius:12px;
+  font-family:'Space Mono',monospace; font-size:15px; font-weight:700;
+  letter-spacing:1px; text-decoration:none;
+  background:linear-gradient(135deg,rgba(140,90,255,0.3),rgba(100,60,200,0.3));
+  border:1px solid rgba(180,140,255,0.45);
+  color:#e0c8ff;
+  box-shadow:0 0 30px rgba(140,90,255,0.25);
+  transition:all 0.2s ease;
+  margin-bottom:12px;
+}
+.launch-btn:hover {
+  background:linear-gradient(135deg,rgba(140,90,255,0.5),rgba(100,60,200,0.5));
+  box-shadow:0 0 50px rgba(140,90,255,0.4);
+  transform:translateY(-2px);
+}
+
+.version-note {
+  font-family:'Space Mono',monospace;
+  font-size:11px; color:rgba(255,255,255,0.2); letter-spacing:1px;
+  margin-bottom:60px;
+}
+
+.features {
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+  gap:16px; max-width:880px; width:100%;
+  margin-bottom:60px;
+}
+.feature-card {
+  background:rgba(255,255,255,0.03);
+  border:1px solid rgba(255,255,255,0.07);
+  border-radius:12px; padding:20px 22px;
+}
+.feature-card .icon {
+  font-size:22px; margin-bottom:10px; display:block;
+}
+.feature-card h3 {
+  font-family:'Space Mono',monospace; font-size:12px;
+  color:#c8b4ff; letter-spacing:1px; margin-bottom:8px;
+}
+.feature-card p {
+  font-size:13px; color:rgba(255,255,255,0.4); line-height:1.7;
+}
+
+.how-to {
+  max-width:560px; width:100%; margin-bottom:60px;
+  border-top:1px solid rgba(255,255,255,0.06); padding-top:40px;
+}
+.how-to h2 {
+  font-family:'Space Mono',monospace; font-size:11px;
+  color:rgba(255,255,255,0.25); letter-spacing:3px; text-transform:uppercase;
+  margin-bottom:24px;
+}
+.step {
+  display:flex; gap:16px; margin-bottom:18px; align-items:flex-start;
+}
+.step-num {
+  font-family:'Space Mono',monospace; font-size:11px; font-weight:700;
+  color:#8c5aff; min-width:22px; padding-top:2px;
+}
+.step p { font-size:14px; color:rgba(255,255,255,0.5); line-height:1.7; }
+.step strong { color:rgba(255,255,255,0.75); }
+
+.footer {
+  font-family:'Space Mono',monospace; font-size:11px;
+  color:rgba(255,255,255,0.15); letter-spacing:1px; text-align:center;
+}
+.footer a { color:rgba(180,140,255,0.4); text-decoration:none; }
+.footer a:hover { color:#c8b4ff; }
+
+/* preview strip */
+.hud-preview {
+  width:100%; max-width:880px;
+  background:#000; border-radius:12px;
+  border:1px solid rgba(255,255,255,0.07);
+  overflow:hidden; margin-bottom:48px;
+  aspect-ratio:16/9; display:flex; align-items:center; justify-content:center;
+  position:relative;
+}
+.hud-preview .preview-inner {
+  text-align:center;
+}
+.preview-chord {
+  font-family:'Space Mono',monospace;
+  font-size:clamp(28px,6vw,72px); font-weight:700;
+  color:#fff;
+  text-shadow:0 0 30px rgba(180,140,255,0.8), 0 0 60px rgba(160,100,255,0.4);
+  letter-spacing:-2px; line-height:1;
+  margin-bottom:14px;
+}
+.preview-degrees {
+  display:flex; gap:6px; justify-content:center; flex-wrap:wrap;
+}
+.preview-deg {
+  width:clamp(28px,4vw,48px); height:clamp(28px,4vw,48px);
+  border-radius:6px; border:1.5px solid rgba(255,255,255,0.12);
+  background:rgba(255,255,255,0.04);
+  display:flex; align-items:center; justify-content:center;
+  font-family:'Space Mono',monospace; font-size:clamp(7px,1vw,11px);
+  color:rgba(255,255,255,0.3);
+}
+.preview-deg.on {
+  border-color:#b48cff; background:rgba(140,90,255,0.25);
+  color:#fff; box-shadow:0 0 12px rgba(140,90,255,0.5);
+}
+.preview-bpm {
+  position:absolute; top:16px; left:20px;
+  font-family:'Space Mono',monospace; font-size:clamp(9px,1.2vw,14px);
+  color:#c8b4ff; opacity:0.7;
+}
+.preview-title {
+  position:absolute; top:12px; right:20px;
+  font-family:'Space Mono',monospace; font-size:clamp(9px,1.5vw,18px);
+  color:#d4b8ff; opacity:0.7; text-align:right;
+}
+</style>
+</head>
+<body>
+
+<div class="logo">Chord HUD</div>
+
+<h1>和弦字幕叠加工具</h1>
+<p class="tagline">专为视频制作设计的和弦 HUD 生成器。导入音频、设置背景、编排时间轴，导出 WebM 后直接叠加到视频上。</p>
+
+<a class="launch-btn" href="chord_hud_v6.html">▶ 打开工具 v6</a>
+<div class="version-note">运行在浏览器中 · 无需安装 · 无需登录</div>
+
+<!-- HUD preview mockup -->
+<div class="hud-preview">
+  <div class="preview-bpm">BPM 120 | Key = C Major</div>
+  <div class="preview-title">Song Title</div>
+  <div class="preview-inner">
+    <div class="preview-chord">Cmaj7</div>
+    <div class="preview-degrees">
+      <div class="preview-deg on">1</div>
+      <div class="preview-deg">b2</div>
+      <div class="preview-deg">2</div>
+      <div class="preview-deg">b3</div>
+      <div class="preview-deg on">3</div>
+      <div class="preview-deg">4</div>
+      <div class="preview-deg">b5</div>
+      <div class="preview-deg on">5</div>
+      <div class="preview-deg">b6</div>
+      <div class="preview-deg">6</div>
+      <div class="preview-deg">b7</div>
+      <div class="preview-deg on">7</div>
+    </div>
+  </div>
+</div>
+
+<div class="features">
+  <div class="feature-card">
+    <span class="icon">🎵</span>
+    <h3>背景音频</h3>
+    <p>导入 MP3 / WAV 等音频文件，预览时同步播放，导出的 WebM 自动包含音轨。</p>
+  </div>
+  <div class="feature-card">
+    <span class="icon">🎬</span>
+    <h3>背景图片 / 视频</h3>
+    <p>可设置静态图片或视频作为 HUD 背景，导出时嵌入帧画面，支持半透明暗化遮罩。</p>
+  </div>
+  <div class="feature-card">
+    <span class="icon">★</span>
+    <h3>重要和弦强调</h3>
+    <p>为关键和弦标记星号，预览和导出时呈现紫色脉冲光晕动画，突出重要变化。</p>
+  </div>
+  <div class="feature-card">
+    <span class="icon">🎼</span>
+    <h3>12 音半音系统</h3>
+    <p>支持全 12 个半音的音级高亮，可切换升 / 降记号标注，同组和弦并排显示。</p>
+  </div>
+  <div class="feature-card">
+    <span class="icon">🔗</span>
+    <h3>承接高亮</h3>
+    <p>每个和弦可承接前几个和弦的音级（琥珀色），直观展示和声关联。</p>
+  </div>
+  <div class="feature-card">
+    <span class="icon">📦</span>
+    <h3>导出 WebM</h3>
+    <p>1920×1080 / 60fps / 8Mbps，导出后在视频编辑软件中以 Screen 模式叠加即可。</p>
+  </div>
+</div>
+
+<div class="how-to">
+  <h2>使用步骤</h2>
+  <div class="step">
+    <div class="step-num">01</div>
+    <p>在<strong>左侧面板</strong>填写曲名、BPM、Key、编曲、人声等基本信息，点击「应用基本信息」。</p>
+  </div>
+  <div class="step">
+    <div class="step-num">02</div>
+    <p>在<strong>右侧时间轴</strong>添加和弦条目，设置开始时间（秒）、和弦名、高亮音级、解说文字。</p>
+  </div>
+  <div class="step">
+    <div class="step-num">03</div>
+    <p>可选：选择<strong>背景音频</strong>与<strong>背景图片 / 视频</strong>，为重要和弦点亮 <strong>★</strong> 开启光晕强调。</p>
+  </div>
+  <div class="step">
+    <div class="step-num">04</div>
+    <p>点击「▶ 预览」实时预览效果，任意键停止；满意后点击「⬇ Export WebM」导出。</p>
+  </div>
+  <div class="step">
+    <div class="step-num">05</div>
+    <p>将导出的 <strong>chord_hud.webm</strong> 导入视频编辑软件，叠加模式设为 <strong>Screen（滤色）</strong>。</p>
+  </div>
+</div>
+
+<div class="footer">
+  <p>Made with Claude Code &nbsp;·&nbsp; <a href="https://github.com/KunqiK/ClaudeCodesTesting" target="_blank">GitHub</a></p>
+</div>
+
+</body>
+</html>
