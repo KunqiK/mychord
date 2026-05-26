@@ -25,16 +25,16 @@ body {
 /* TOP RIGHT */
 #top-right { position:absolute; top:24px; right:48px; text-align:right; }
 #song-title {
-  font-size:30px; font-weight:700; letter-spacing:1px;
+  font-size:40px; font-weight:700; letter-spacing:1px;
   color:#d4b8ff;
   text-shadow:0 0 24px rgba(180,130,255,0.7);
 }
 #song-meta {
-  margin-top:8px;
+  margin-top:10px;
   font-family:'Noto Sans SC',sans-serif;
-  font-size:19px; color:rgba(255,255,255,0.5); line-height:1.9;
+  font-size:26px; color:rgba(255,255,255,0.45); line-height:1.8;
 }
-#song-meta span { color:rgba(255,255,255,0.9); }
+#song-meta span { color:#c8b4ff; }
 
 /* CHORD DISPLAY CONTAINER */
 #hud-center {
@@ -154,6 +154,8 @@ body {
 .hbtn-purple:hover { background:rgba(140,90,255,0.35); }
 .hbtn-orange { background:rgba(255,140,80,0.2); border-color:rgba(255,140,80,0.45); color:#ffb890; }
 .hbtn-orange:hover { background:rgba(255,140,80,0.35); }
+.hbtn-green { background:rgba(80,200,120,0.15); border-color:rgba(80,200,120,0.4); color:#7fe8a0; }
+.hbtn-green:hover { background:rgba(80,200,120,0.28); }
 .hint-text { font-size:11px; color:rgba(255,255,255,0.2); font-family:'Space Mono',monospace; line-height:1.6; }
 
 #editor-body { display:flex; flex:1; overflow:hidden; }
@@ -371,6 +373,9 @@ body {
     <h2>CHORD HUD v5</h2>
     <button class="hbtn hbtn-purple" onclick="previewHUD()">▶ 预览</button>
     <button class="hbtn hbtn-orange" onclick="startExport()">⬇ Export WebM</button>
+    <button class="hbtn hbtn-green" onclick="saveProject()">💾 保存</button>
+    <button class="hbtn hbtn-green" onclick="document.getElementById('load-input').click()">📂 导入</button>
+    <input id="load-input" type="file" accept=".json" style="display:none" onchange="loadProject(this)">
     <div style="flex:1"></div>
     <div class="hint-text">导出后叠加模式选 <strong style="color:rgba(255,255,255,0.45)">Screen</strong></div>
   </div>
@@ -793,15 +798,19 @@ function drawCanvas(ctx,idx,elapsed,total) {
   const vocalist=document.getElementById('in-vocalist').value;
   const release=document.getElementById('in-release').value.trim();
   ctx.textAlign='right';
-  ctx.font='700 30px "Space Mono"';
+  ctx.font='700 40px "Space Mono"';
   ctx.fillStyle='#d4b8ff';
   ctx.shadowColor='rgba(180,130,255,0.7)'; ctx.shadowBlur=24;
-  ctx.fillText(title,W-48,62); ctx.shadowBlur=0;
-  ctx.font='400 19px "Noto Sans SC"';
-  ctx.fillStyle='rgba(255,255,255,0.5)';
-  ctx.fillText('编曲：'+composer,W-48,98);
-  ctx.fillText('人声：'+vocalist,W-48,134);
-  if (release) ctx.fillText('发布：'+release,W-48,170);
+  ctx.fillText(title,W-48,72); ctx.shadowBlur=0;
+  ctx.font='400 26px "Noto Sans SC"';
+  function metaLine(label,value,y){
+    const vw=ctx.measureText(value).width;
+    ctx.fillStyle='#c8b4ff'; ctx.fillText(value,W-48,y);
+    ctx.fillStyle='rgba(255,255,255,0.45)'; ctx.fillText(label,W-48-vw,y);
+  }
+  metaLine('编曲：',composer,118);
+  metaLine('人声：',vocalist,165);
+  if(release) metaLine('发布：',release,212);
 
   // CHORD — single or grouped
   const group=(item.group||'').trim();
@@ -935,6 +944,72 @@ function rrect(ctx,x,y,w,h,r){
   ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);ctx.lineTo(x+r,y+h);
   ctx.quadraticCurveTo(x,y+h,x,y+h-r);ctx.lineTo(x,y+r);
   ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath();
+}
+
+// ── SAVE / LOAD ──
+function saveProject() {
+  syncTimelineFromDOM();
+  const data = {
+    version: 1,
+    bpm:        document.getElementById('in-bpm').value,
+    key:        document.getElementById('in-key').value,
+    title:      document.getElementById('in-title').value,
+    composer:   document.getElementById('in-composer').value,
+    vocalist:   document.getElementById('in-vocalist').value,
+    release:    document.getElementById('in-release').value,
+    total:      document.getElementById('in-total').value,
+    vertPos,
+    accidental,
+    globalNotes: globalNotes.slice(),
+    timeline:   JSON.parse(JSON.stringify(timeline)),
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = (data.title || 'chord_hud') + '.json';
+  a.click();
+}
+
+function loadProject(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (data.bpm !== undefined)      document.getElementById('in-bpm').value      = data.bpm;
+      if (data.key !== undefined)      document.getElementById('in-key').value      = data.key;
+      if (data.title !== undefined)    document.getElementById('in-title').value    = data.title;
+      if (data.composer !== undefined) document.getElementById('in-composer').value = data.composer;
+      if (data.vocalist !== undefined) document.getElementById('in-vocalist').value = data.vocalist;
+      if (data.release !== undefined)  document.getElementById('in-release').value  = data.release;
+      if (data.total !== undefined)    document.getElementById('in-total').value    = data.total;
+      if (data.vertPos !== undefined) {
+        vertPos = data.vertPos;
+        document.getElementById('pos-slider').value = vertPos;
+        document.getElementById('pos-val').textContent = vertPos + ' px';
+        document.getElementById('hud-center').style.top = vertPos + 'px';
+      }
+      if (Array.isArray(data.globalNotes)) {
+        globalNotes = data.globalNotes.slice();
+        for (let d = 0; d < 12; d++) {
+          const el = document.getElementById('ng-' + d);
+          if (el) el.value = globalNotes[d] || '';
+        }
+      }
+      if (data.accidental) setAccidental(data.accidental);
+      if (Array.isArray(data.timeline)) timeline = data.timeline;
+      applyStatic();
+      renderNoteGrid();
+      renderList();
+      lastIdx = -1;
+      applyFrame(0, false);
+    } catch(err) {
+      alert('导入失败：文件格式有误\n' + err.message);
+    }
+    input.value = '';
+  };
+  reader.readAsText(file);
 }
 
 // INIT
