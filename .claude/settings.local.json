@@ -4,7 +4,25 @@
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
       "Bash(start *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(git clone *)",
+      "Bash(pip install *)",
+      "PowerShell(python -m pip install -r \"K:\\\\Misc\\\\ClaudeCodesTesting\\\\Music-Source-Separation-Training-GUI\\\\requirements.txt\")",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:api.github.com)",
+      "PowerShell(Invoke-WebRequest -Uri \"https://aka.ms/vs/17/release/vs_BuildTools.exe\" -OutFile \"$env:USERPROFILE\\\\Desktop\\\\vs_BuildTools.exe\" -UseBasicParsing)",
+      "PowerShell($env:PYTHONUTF8=\"1\"; & \"C:\\\\Users\\\\kunqi\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python312\\\\python.exe\" \"K:\\\\Misc\\\\ClaudeCodesTesting\\\\Music-Source-Separation-Training-GUI\\\\msst_gui_zh.py\")",
+      "WebSearch",
+      "WebFetch(domain:cdn.jsdelivr.net)",
+      "WebFetch(domain:unpkg.com)",
+      "PowerShell(npm install *)",
+      "mcp__playwright__browser_navigate",
+      "Bash(where chrome *)",
+      "Read(//c/Program Files/Google/Chrome/Application/**)",
+      "Read(//c/Program Files \\(x86\\)/Google/Chrome/Application/**)",
+      "PowerShell(Get-Command *)",
+      "PowerShell(npx playwright install chromium 2>&1 | Select-Object -Last 20)",
+      "PowerShell(npx --yes playwright install chromium 2>&1 | Select-Object -Last 10)"
     ]
   }
 }

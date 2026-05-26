@@ -163,8 +163,8 @@ h1 {
 <h1>和弦字幕叠加工具</h1>
 <p class="tagline">专为视频制作设计的和弦 HUD 生成器。导入音频、设置背景、编排时间轴，导出 WebM 后直接叠加到视频上。</p>
 
-<a class="launch-btn" href="chord_hud_v11.html">▶ 打开工具 v11</a>
-<div class="version-note">运行在浏览器中 · 无需安装 · 无需登录 · v11 新增 MP4 导出 + 拍号选择 + 爵士和弦识别</div>
+<a class="launch-btn" href="chord_hud_v11.1.html">▶ 打开工具 v11.1</a>
+<div class="version-note">运行在浏览器中 · 无需安装 · 无需登录 · v11.1 多解和弦识别 + MP4 导出修复 + 拍号选择</div>
 
 <!-- HUD preview mockup -->
 <div class="hud-preview">
@@ -203,7 +203,7 @@ h1 {
   <div class="feature-card">
     <span class="icon">★</span>
     <h3>重要和弦强调</h3>
-    <p>为关键和弦标记星号，预览和导出时呈现紫色脉冲光晕动画，突出重要变化。</p>
+    <p>为关键和弦标记星号，预览和导出时呈现红色脉冲光晕动画，突出重要变化。</p>
   </div>
   <div class="feature-card">
     <span class="icon">🎼</span>
@@ -218,7 +218,17 @@ h1 {
   <div class="feature-card">
     <span class="icon">📦</span>
     <h3>导出 MP4 / WebM</h3>
-    <p>1920×1080 / 60fps / 8Mbps。MP4（H.264）可直接导入 DaVinci Resolve；WebM 含音轨混合。</p>
+    <p>1920×1080 / 60fps / 8Mbps。MP4（H.264）可直接导入 DaVinci Resolve；WebM 含音轨混合（需 Chrome / Edge 94+）。</p>
+  </div>
+  <div class="feature-card">
+    <span class="icon">🎹</span>
+    <h3>MIDI / 文字导入</h3>
+    <p>直接导入 MIDI 文件自动识别和弦（支持多解备选），或粘贴「Am G F C」批量生成时间轴；支持撤销 / 重做（Ctrl+Z / Y）。</p>
+  </div>
+  <div class="feature-card">
+    <span class="icon">♩</span>
+    <h3>拍号 &amp; 小节模式</h3>
+    <p>时间输入可在「秒数」与「小节·拍」间切换；内置 2/4、3/4、4/4、5/4、6/4、7/4 快捷按钮，修改 BPM 自动重算所有时间点。</p>
   </div>
 </div>
 
@@ -238,11 +248,11 @@ h1 {
   </div>
   <div class="step">
     <div class="step-num">04</div>
-    <p>点击「▶ 预览」实时预览效果，任意键停止；满意后点击「⬇ Export WebM」导出。</p>
+    <p>点击「▶ 预览」实时预览效果，任意键停止；满意后点击「⬇ MP4」导出（H.264，兼容 DaVinci）；或「⬇ WebM」（含音轨，适合 Premiere / Final Cut）。</p>
   </div>
   <div class="step">
     <div class="step-num">05</div>
-    <p>将导出的 <strong>chord_hud.webm</strong> 导入视频编辑软件，叠加模式设为 <strong>Screen（滤色）</strong>。</p>
+    <p>将导出的 MP4 / WebM 导入视频编辑软件，叠加模式设为 <strong>Screen（滤色）</strong>。DaVinci Resolve (Windows) 请使用 MP4；MP4 导出需 Chrome / Edge 94+。</p>
   </div>
 </div>
 

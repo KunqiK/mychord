@@ -163,3 +163,36 @@ Built on v9. Adds MP4 export via WebCodecs + mp4-muxer. **v9 was not modified.**
 | Function | Purpose |
 |---|---|
 | `startExportMp4()` | Async: checks WebCodecs support, loads mp4-muxer, encodes all frames, downloads `.mp4`. |
+
+---
+
+### chord_hud_v11.html
+Built on v10. Expands MIDI chord vocabulary and improves detection accuracy. **v10 was not modified.**
+
+**Additional features over v10:**
+- **Extended CHORD_TEMPLATES**: 22 templates across 3 tiers — 5-note (maj9, m9, 9, 7b9, 7#9), 4-note (maj7, mMaj7, m7, m7b5, 7, 7sus4, augMaj7, dim7, 6, m6, add9), 3-note (aug, dim, sus4, sus2, major triad, minor triad). Replaces the 9-template set originally in v8.
+- **mp4-muxer inlined**: Embeds mp4-muxer@5.2.2 directly (no CDN dependency) to fix export on browsers that block jsDelivr.
+
+**Key functions (expanded template set; logic unchanged):**
+| Function | Purpose |
+|---|---|
+| `detectChord(pitchClasses)` | Best-fit pitch-class match over all 22 templates; returns root+suffix or `???`. |
+
+---
+
+### chord_hud_v11.1.html
+Built on v11. Adds multi-interpretation chord detection, bass/slash chords, alt chips in the editor, and a robust MP4 export with codec fallback. **v11 was not modified.**
+
+**Additional features over v11:**
+- **多解和弦检测 `detectChords(pitchClasses, bassPC)`**: Replaces `detectChord`. Returns up to 8 ranked `{name, score}` candidates. Scoring uses interval weights (`INTERVAL_WEIGHTS = [3,0.5,1,2.5,2.5,1,1.5,1.5,1,1.5,2,2]` indexed by semitone from root). Relaxed threshold: ≥75% of template notes required (was 100%).
+- **Bass/slash chord notation**: `importMidiFile` tracks `minNote` (lowest raw MIDI pitch) per simultaneous group; if `minNote % 12 ≠ root`, appends `/BassNote` to all candidate names (e.g., `Am/E`).
+- **备选和弦 alt chips**: Each timeline entry gains `alts: string[]` (top 4 alternatives after the selected chord). Rendered as teal `.alt-chip` buttons below the annotation field. `pickAlt(i, name)` swaps chord in-place and updates DOM without calling `renderList()`. `alts` persists in `saveProject()` JSON.
+- **MP4 导出修复**: Codec fallback chain tries `avc1.640029` → `avc1.4D4029` → `avc1.42E029` → `avc1.42E01F`. Output callback and `encoder.flush()` wrapped in try/catch. 5-second per-frame queue timeout prevents hangs. `encoder.close()` called on all exit paths. Detailed error messages guide users to chrome://settings hardware acceleration.
+
+**Key functions (v11.1 additions):**
+| Function | Purpose |
+|---|---|
+| `detectChords(pitchClasses, bassPC)` | Returns `[{name, score}, …]` sorted descending; adds `/BassNote` when bass ≠ root. |
+| `pickAlt(i, name)` | Swaps selected chord ↔ clicked alt in `timeline[i]`; updates chord input and alt chip row in-place. |
+
+**saveProject() version:** 3 (unchanged; `alts` round-trips via `JSON.parse(JSON.stringify(timeline))`; old project files load fine).
