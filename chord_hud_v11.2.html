@@ -3358,14 +3358,17 @@ async function convertWebmToMp4() {
   show('加载 ffmpeg.wasm…（首次约 10–30s，需联网）');
   try {
     if (!ffmpegInst) {
-      const { FFmpeg }    = await import('https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/esm/index.js');
+      show('加载 ffmpeg.wasm…（首次约 10–30s，需联网）');
+      const { FFmpeg }    = await import('https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.6/dist/esm/index.js');
       const { toBlobURL } = await import('https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/esm/index.js');
-      ffmpegInst = new FFmpeg();
-      ffmpegInst.on('log', ({ message }) => console.log('[ffmpeg]', message));
-      await ffmpegInst.load({
+      const inst = new FFmpeg();
+      inst.on('log', ({ message }) => console.log('[ffmpeg]', message));
+      show('下载 wasm 核心…');
+      await inst.load({
         coreURL: await toBlobURL('https://cdn.jsdelivr.net/npm/@ffmpeg/core-st@0.12.6/dist/esm/ffmpeg-core.js', 'text/javascript'),
         wasmURL: await toBlobURL('https://cdn.jsdelivr.net/npm/@ffmpeg/core-st@0.12.6/dist/esm/ffmpeg-core.wasm', 'application/wasm'),
       });
+      ffmpegInst = inst; // 只在 load 成功后才赋值
     }
     const { fetchFile } = await import('https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/esm/index.js');
     show('写入 WebM 数据…');
@@ -3384,6 +3387,7 @@ async function convertWebmToMp4() {
     show('✓ MP4 已下载');
     setTimeout(() => statusEl.classList.remove('visible'), 3000);
   } catch (e) {
+    ffmpegInst = null; // 重置，允许重试
     show('转换失败: ' + e.message);
     setTimeout(() => statusEl.classList.remove('visible'), 6000);
   }
