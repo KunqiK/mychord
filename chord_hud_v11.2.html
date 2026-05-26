@@ -3365,8 +3365,9 @@ async function convertWebmToMp4() {
       inst.on('log', ({ message }) => console.log('[ffmpeg]', message));
       show('下载 wasm 核心…');
       await inst.load({
-        coreURL: await toBlobURL('https://cdn.jsdelivr.net/npm/@ffmpeg/core-st@0.12.6/dist/esm/ffmpeg-core.js', 'text/javascript'),
-        wasmURL: await toBlobURL('https://cdn.jsdelivr.net/npm/@ffmpeg/core-st@0.12.6/dist/esm/ffmpeg-core.wasm', 'application/wasm'),
+        coreURL:   await toBlobURL('https://cdn.jsdelivr.net/npm/@ffmpeg/core-st@0.12.6/dist/esm/ffmpeg-core.js',   'text/javascript'),
+        wasmURL:   await toBlobURL('https://cdn.jsdelivr.net/npm/@ffmpeg/core-st@0.12.6/dist/esm/ffmpeg-core.wasm', 'application/wasm'),
+        workerURL: await toBlobURL('https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.6/dist/esm/worker.js',         'text/javascript'),
       });
       ffmpegInst = inst; // 只在 load 成功后才赋值
     }
