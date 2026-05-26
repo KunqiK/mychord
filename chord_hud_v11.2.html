@@ -3122,13 +3122,14 @@ function sortTimeline() {
 
 // ── COPY / PASTE ROWS ──
 function copySelected() {
-  syncTimelineFromDOM();
+  // Read indices BEFORE syncTimelineFromDOM reorders timeline[], otherwise data-idx is stale
   const indices = [...document.querySelectorAll('.tl-checkbox:checked')]
     .map(cb => parseInt(cb.dataset.idx))
     .filter(i => i >= 0 && i < timeline.length);
   if (!indices.length) { alert('请先勾选要复制的行'); return; }
   clipboardRows = indices.map(i => JSON.parse(JSON.stringify(timeline[i])));
   clipboardRows.sort((a, b) => a.time - b.time);
+  syncTimelineFromDOM();
   const btn = document.getElementById('paste-btn');
   btn.disabled = false;
   btn.textContent = `📋 粘贴到末尾 (${clipboardRows.length})`;
