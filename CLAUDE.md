@@ -196,3 +196,40 @@ Built on v11. Adds multi-interpretation chord detection, bass/slash chords, alt 
 | `pickAlt(i, name)` | Swaps selected chord ↔ clicked alt in `timeline[i]`; updates chord input and alt chip row in-place. |
 
 **saveProject() version:** 3 (unchanged; `alts` round-trips via `JSON.parse(JSON.stringify(timeline))`; old project files load fine).
+
+---
+
+### chord_hud_v11.2.html
+Built on v11.1. Adds row copy-paste and in-browser WebM→MP4 conversion. **v11.1 was not modified.**
+
+**Additional features over v11.1:**
+- **⬜ 复制所选 / 📋 粘贴到末尾**: Per-row checkboxes (`.tl-checkbox`) select timeline entries; `copySelected()` snapshots the checked rows (reading checkbox indices *before* `syncTimelineFromDOM()` to avoid index drift), `pasteToEnd()` appends deep copies at the end with a time offset. The paste button shows the clipboard count and is disabled when empty.
+- **🔄 WebM→MP4 转换**: `convertWebmToMp4()` loads `ffmpeg.wasm` (worker fetched via `toBlobURL` so it works from a `file://` origin), remuxes the last-recorded WebM blob to MP4, and downloads it. Button enabled only after a WebM has been recorded. `ffmpegInst` is assigned only after `load()` succeeds and reset on failure.
+
+**Key functions (v11.2 additions):**
+| Function | Purpose |
+|---|---|
+| `copySelected()` | Reads checked row indices, deep-copies those entries to an in-memory clipboard, updates paste button count/state. |
+| `pasteToEnd()` | Appends clipboard entries to the end of `timeline` with a time offset; re-renders. |
+| `convertWebmToMp4()` | Lazy-loads ffmpeg.wasm and remuxes the recorded WebM blob to MP4 in-browser. |
+
+---
+
+### chord_hud_v11.3.html
+Built on v11.2. A **readability / usability pass**: adds a comprehensive in-app Help guide and reorganizes the editor chrome so new users aren't lost. **No feature logic, export, or save format changed. v11.2 was not modified.**
+
+**Additional features over v11.2:**
+- **❓ 帮助 (Help) modal**: New `#help-modal` (reuses the existing `.modal-overlay` / `.modal-box` pattern with a wider scrollable `.modal-help` variant). Seven scannable sections — 快速上手(4-step quick start), 时间轴字段说明, 时间模式, 导入, 导出格式选择, 快捷键, 小贴士 — written in Chinese to match the UI. Opened from a standout teal `❓ 帮助` button in the header.
+- **Grouped / labeled toolbar**: The flat 12-button header row is wrapped into labeled clusters (`.tb-group` + `.tb-group-label`) — 播放/导出, 工程, 编辑, 导入和弦 — separated by `.tb-sep` dividers. All existing button `id`s/`onclick`s are untouched, so undo/redo/paste enable-state logic is unaffected.
+- **Section hints**: One-line `.section-hint` captions under each left/right panel `<h3>` explaining what the block does.
+- **Info tooltips**: `title=` tooltips + small `.info-dot` (ⓘ) affordances on the cryptic per-row controls (承接前, 分组), and clarified tooltips on ★ emphasis, ✕ delete, and 高亮音级.
+- **Esc-to-close + first-visit nudge**: The keydown handler now closes any open modal on `Esc` (via `anyModalOpen()`); on first load (no `localStorage['chordhud_help_seen']`) the 帮助 button pulses via a `.nudge` animation until opened once. localStorage wrapped in try/catch for `file://`.
+
+**Key functions (v11.3 additions):**
+| Function | Purpose |
+|---|---|
+| `showHelpModal()` | Shows `#help-modal`, scrolls it to top, clears the nudge, sets the `chordhud_help_seen` flag. |
+| `closeHelpModal()` | Hides `#help-modal`. |
+| `anyModalOpen()` | Returns true if the help or text-import modal is visible; gates keyboard shortcuts and drives Esc handling. |
+
+**saveProject() version:** 3 (unchanged; v11.3 adds no data fields — older/newer project files interoperate).
