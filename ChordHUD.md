@@ -2,7 +2,7 @@
 
 A browser-based chord/progression HUD designed for video overlay (1920×1080, black background, Screen blending mode). Each version is a single self-contained HTML file; new features are always built into a **new** file (`chord_hud_vN.html`) — the previous version is never modified.
 
-**Current version: `chord_hud_v12.html`**
+**Current version: `chord_hud_v12.1.html`**
 
 All ChordHUD documentation lives in this file (moved out of CLAUDE.md on 2026-07-01). Record all future ChordHUD changes here.
 
@@ -284,3 +284,30 @@ Built on v11.3. Adds a rotating vinyl/jacket layer, a redesigned two-row degree 
 | `vinylRPMNow()` / `setVinylSpeed(v)` | Disc RPM derived from BPM: `bpm / (beatsPerBar × vinylBarsPerRev)`; select offers 1/2/4/8 bars per revolution or static. |
 
 **saveProject() version:** 4 (adds `vinylBarsPerRev`; the jacket/background images themselves are not persisted — same policy as background media and audio; v3 and older project files load fine).
+
+---
+
+### chord_hud_v12.1.html
+Built on v12. An **export-correctness release**: fixes the silently-broken MP4 export (broken since v10), muxes background audio into the MP4, and removes the ffmpeg.wasm converter. **v12 was not modified.**
+
+**Session history (2026-07-02):**
+- **Root cause of the MP4 failure (v10–v12)**: the inlined mp4-muxer requires an explicit `fastStart` option; `new Muxer(...)` in `startExportMp4()` never passed one and threw `'fastStart' option must be false, 'in-memory', 'fragmented' or an object`. The throw happened inside an async function *before* any try/catch or UI change, so it became an unhandled promise rejection — the button appeared to do nothing. All the v11.1 codec-fallback work was fixing the wrong layer.
+- The 🔄 WebM→MP4 converter was separately broken: it fetched `@ffmpeg/core-st@0.12.6`, a package that does not exist on jsDelivr (404), and `@ffmpeg/ffmpeg@0.12.6` builds its main worker from the CDN URL internally (the `workerURL` load option only overrides the *core* worker), which a `file://` page cannot do (`cannot be accessed from origin 'null'`). Even fully working, its `-c copy` remux would emit VP9-in-MP4, which DaVinci rejects just like WebM — only a transcode helps (that is why cloudconvert worked).
+- Verified in headless Chromium **and real Edge**: 6s 1080p60 H.264 exports in ~4s (faster than realtime, unlike the WebM path), valid `ftyp isom/avc1` container, plays end-to-end; with a loaded 背景音频 the MP4 contains an audible AAC track (`webkitAudioDecodedByteCount` > 0 during playback). Deliberate-failure test confirms errors now alert + show in the status strip with the editor restored.
+
+**Changes from v12:**
+- **⬇ MP4 修复**: `fastStart: 'in-memory'` added to the Muxer options (correct mode for `ArrayBufferTarget`); the whole of `startExportMp4()` is wrapped in try/catch/finally — any failure alerts, shows in `#export-status`, and always restores the editor UI and closes the encoder.
+- **MP4 含音频**: `loadAudio()` stashes the picked `File` in `hudAudioFile`; export decodes it via `AudioContext.decodeAudioData`, AAC-encodes with `AudioEncoder` (`mp4a.40.2`, 192 kbps, ≤2 ch, 1-second planar `AudioData` slices), and muxes it as an MP4 audio track trimmed to the export duration. Falls back to video-only with a visible note when AAC encoding is unsupported.
+- **🔄 WebM→MP4 removed**: button, `convertWebmToMp4()`, and the `ffmpegInst`/`lastWebmBlob` state deleted; help bullet dropped (see root-cause notes above for why it could never work).
+- **Export hygiene**: shared `EXPORT_W/H/FPS/BITRATE` constants used by both exporters; `exportStatusShow()/exportStatusHide()` helpers are the single write path for `#export-status` (it contains the `#export-timer` span — the old converter's `textContent` writes destroyed it); `URL.revokeObjectURL()` after WebM/MP4 downloads; the pointless keep-alive `setInterval` removed.
+- **Help ⑤ rewritten**: MP4 = recommended, notes audio inclusion and faster-than-realtime export; converter bullet removed.
+- **Inline-handler audit**: all generated row handlers already route through `setEntry*()`/named functions (v12's `document.timeline` fix); no bare `timeline[...]` references remain in HTML attributes or generated markup.
+
+**Key functions (v12.1 additions/changes):**
+| Function | Purpose |
+|---|---|
+| `exportStatusShow(html)` / `exportStatusHide()` | Single write path for `#export-status`; each export re-creates its own `#export-timer` span. |
+| `startExportMp4()` | Rewritten: fastStart fix, full-body error guard, optional AAC audio track, try/finally UI restore. |
+| `loadAudio(input)` / `clearAudio()` | Also set / clear `hudAudioFile` so the MP4 exporter can encode the audio offline. |
+
+**saveProject() version:** 4 (unchanged — v12 project files interoperate).
