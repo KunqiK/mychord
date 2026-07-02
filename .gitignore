@@ -1,0 +1,8 @@
+# Local test/session artifacts — not part of the project
+*.webm
+*.log
+image.png
+.playwright-mcp/
+
+# Separate nested git repo (own project, not tracked here)
+Music-Source-Separation-Training-GUI/

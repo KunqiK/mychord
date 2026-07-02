@@ -22,7 +22,8 @@
       "Read(//c/Program Files \\(x86\\)/Google/Chrome/Application/**)",
       "PowerShell(Get-Command *)",
       "PowerShell(npx playwright install chromium 2>&1 | Select-Object -Last 20)",
-      "PowerShell(npx --yes playwright install chromium 2>&1 | Select-Object -Last 10)"
+      "PowerShell(npx --yes playwright install chromium 2>&1 | Select-Object -Last 10)",
+      "Skill(update-config)"
     ]
   }
 }
