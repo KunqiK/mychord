@@ -2,7 +2,7 @@
 
 A browser-based chord/progression HUD designed for video overlay (1920×1080, black background, Screen blending mode). Each version is a single self-contained HTML file; new features are always built into a **new** file (`chord_hud_vN.html`) — the previous version is never modified.
 
-**Current version: `chord_hud_v13.html`**
+**Current version: `chord_hud_v14.html`**
 
 All ChordHUD documentation lives in this file (moved out of CLAUDE.md on 2026-07-01). Record all future ChordHUD changes here.
 
@@ -345,3 +345,25 @@ Built on v12.1. A **UI redesign of the editor**, imported from **Claude Design**
 **Preserved contract:** every element id, input id, and inline handler name from v12.1 is unchanged; the HUD output (`drawCanvas`, `drawVinyl`, `DEG_LAYOUT`, `renderHUDDegrees`, WebM/MP4 export) is byte-for-byte identical. Single self-contained `file://` HTML, no new external dependencies.
 
 **saveProject() version:** 4 (unchanged; v12 project files interoperate).
+
+---
+
+### chord_hud_v14.html
+Built on v13. Adds a **中文 / English UI language toggle**. **The rendered HUD output is unchanged** — including the on-screen `编曲：/ 人声：/ 发布：` meta labels, which are deliberately left as-is so exported videos are unaffected. v13 was not modified.
+
+**Session (2026-07-09):**
+- New **EN / 中文 toggle** button in the header (`toggleLang()`); the choice persists in `localStorage['chordhud_lang']` and defaults to **中文** (English is opt-in, restored at INIT).
+- i18n mechanism (no per-element markup surgery): a compact `I18N_PAIRS` dictionary drives a **text-node walk** in `setLang()` that swaps every static label / button / hint / tooltip / `<select>` option across the header, song-info, timeline tools, Design page, live-panel and the paste-import modal. `tr(zh, en)` handles all **JS-generated** text — summary rows (组 / 承 / 备选), the 行详情 detail editor, the timing / paste buttons, `alert()`s, MIDI and export-status messages. Rich blocks (`#d-intro`, the paste note) swap via `innerHTML` (`I18N_RICH`); the **Help modal** toggles between a Chinese `#help-zh` and a fully-translated English `#help-en`.
+- All element ids / handlers preserved. Verified a clean **en ↔ zh round-trip** across every panel and both modals with no console errors; the realtime-preview keyboard shortcuts still work.
+
+**Key functions (v14 additions):**
+| Function | Purpose |
+|---|---|
+| `setLang(lang)` | Switches the whole editor to `'zh'` / `'en'`: text-node walk + attribute/rich swaps + Help dual-div toggle, then re-renders dynamic content and persists the choice. |
+| `toggleLang()` | Flips between 中文 and English (the header EN / 中文 button). |
+| `tr(zh, en)` | Returns the string for the current `LANG`; used by all JS-generated UI text. |
+| `applyTimingBtnText()` / `applyPasteBtnText()` | Re-apply the JS-set timing-mode and paste-button labels in the current language. |
+
+**Data:** `I18N_PAIRS` (static zh↔en pairs), `I18N_RICH` (innerHTML blocks).
+
+**saveProject() version:** 4 (unchanged; UI language is a local preference, not stored in the project file).
