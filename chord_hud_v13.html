@@ -2946,8 +2946,8 @@ if (typeof module === "object" && typeof module.exports === "object") Object.ass
       </div>
       <canvas id="live-canvas" width="1920" height="1080"></canvas>
       <div id="live-controls">
-        <button id="live-play-btn" class="live-hbtn" onclick="toggleLivePlay()" title="从当前位置播放 / 暂停（含音频）">▶</button>
-        <input type="range" id="live-scrub" min="0" max="30" step="0.01" value="0" oninput="onLiveScrub(this.value)">
+        <button id="live-play-btn" class="live-hbtn" onclick="toggleLivePlay()" title="从当前位置播放 / 暂停 · 空格键（含音频）">▶</button>
+        <input type="range" id="live-scrub" min="0" max="30" step="0.01" value="0" title="拖动定位 · ← → 前后 5 秒（Shift 25 秒 / Ctrl 2 秒）" oninput="onLiveScrub(this.value)">
         <span id="live-time">0:00.0 / 0:30</span>
       </div>
     </div>
@@ -3046,6 +3046,8 @@ if (typeof module === "object" && typeof module.exports === "object") Object.ass
       <p>
         <span class="help-kbd">Ctrl</span>+<span class="help-kbd">Z</span> 撤销 ·
         <span class="help-kbd">Ctrl</span>+<span class="help-kbd">Y</span> 重做 ·
+        <span class="help-kbd">空格</span> 播放 / 暂停实时预览 ·
+        <span class="help-kbd">←</span> <span class="help-kbd">→</span> 实时预览前后 5 秒（<span class="help-kbd">Shift</span> 25 秒 · <span class="help-kbd">Ctrl</span> 2 秒）·
         预览中 <span class="help-kbd">任意键</span> 停止 ·
         预览中 <span class="help-kbd">点击进度条</span> 跳转 ·
         <span class="help-kbd">Esc</span> 关闭弹窗
@@ -5147,6 +5149,26 @@ document.addEventListener('keydown', e => {
     return;
   }
   if (anyModalOpen()) return;
+  // v13: realtime-preview transport shortcuts (skipped while typing in a text field)
+  {
+    const _el = e.target || {};
+    const _tag = (_el.tagName || '').toLowerCase();
+    const _type = (_el.type || '').toLowerCase();
+    const _safe = ['range','checkbox','radio','button','submit','reset','file','color'];
+    const _isText = _tag === 'textarea' || _tag === 'select' || _el.isContentEditable ||
+                    (_tag === 'input' && !_safe.includes(_type));
+    if (!_isText) {
+      if (e.code === 'Space') { e.preventDefault(); toggleLivePlay(); return; }
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        e.preventDefault();
+        const step = e.shiftKey ? 25 : ((e.ctrlKey || e.metaKey) ? 2 : 5);
+        const total = parseFloat(document.getElementById('in-total').value) || 30;
+        const nt = Math.max(0, Math.min(total, liveScrubT + (e.key === 'ArrowRight' ? step : -step)));
+        onLiveScrub(nt);
+        return;
+      }
+    }
+  }
   if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') {
     e.preventDefault(); undo();
   } else if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'y' || (e.shiftKey && e.key.toLowerCase() === 'z'))) {

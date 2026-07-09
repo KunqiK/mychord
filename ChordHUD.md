@@ -321,6 +321,7 @@ Built on v12.1. A **UI redesign of the editor**, imported from **Claude Design**
 - Imported the Claude Design exploration doc via the design MCP (`DesignSync.get_file`), chose direction **1c**, and implemented it — fixing the doc's minor inconsistencies (a duplicated 应用基本信息 button, a malformed 发布时间 field) and wiring every Claude Design `{{ noop }}` placeholder to the real `onclick` / id handlers.
 - Layout refined after user feedback: the live preview is a full-height right column (was pushed down under the header/song-info); the 时间模式 button label shortened to 秒数模式 / 小节模式 and the 曲名 label simplified.
 - Second feedback pass: **responsive layout** (header wraps, the preview column narrows at breakpoints, Design cards collapse to one column) so high browser-zoom / narrow windows no longer cram or overflow; the default **white scrollbars replaced with thin, theme-matched** ones (scroll preserved); header tightened (icon-only 🖥 live toggle, ⬇ MP4) to stay one line; docked-preview controls shrink instead of overflowing.
+- Added **实时预览快捷键**: 空格 播放/暂停；← / → 定位前后 5 秒，Shift ±25 秒，Ctrl ±2 秒 (handled in the global keydown listener, skipped while typing in a text field; documented in the ❓ 帮助 快捷键 section and the scrub/play tooltips).
 - The **Design page was not part of the exploration doc** (it only covered the Input page); it was built to match the chosen direction, reusing the existing media/notes/position controls and their ids.
 
 **Additional features / changes over v12.1:**
