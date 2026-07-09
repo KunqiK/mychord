@@ -2,7 +2,7 @@
 
 A browser-based chord/progression HUD designed for video overlay (1920×1080, black background, Screen blending mode). Each version is a single self-contained HTML file; new features are always built into a **new** file (`chord_hud_vN.html`) — the previous version is never modified.
 
-**Current version: `chord_hud_v12.1.html`**
+**Current version: `chord_hud_v13.html`**
 
 All ChordHUD documentation lives in this file (moved out of CLAUDE.md on 2026-07-01). Record all future ChordHUD changes here.
 
@@ -311,3 +311,34 @@ Built on v12. An **export-correctness release**: fixes the silently-broken MP4 e
 | `loadAudio(input)` / `clearAudio()` | Also set / clear `hudAudioFile` so the MP4 exporter can encode the audio offline. |
 
 **saveProject() version:** 4 (unchanged — v12 project files interoperate).
+
+---
+
+### chord_hud_v13.html
+Built on v12.1. A **UI redesign of the editor**, imported from **Claude Design** (project "ChordHUD editor UI redesign", the **"编辑部 · 静 / Editorial-calm"** direction, option `1c` in `Editor Redesign Explorations.dc.html`). Reorganizes the editor into two pages with a row-detail editing model. **The HUD output renderer, export, MIDI/paste import, undo/redo, and save format are all unchanged. v12.1 was not modified.**
+
+**Session history (2026-07-09):**
+- Imported the Claude Design exploration doc via the design MCP (`DesignSync.get_file`), chose direction **1c**, and implemented it — fixing the doc's minor inconsistencies (a duplicated 应用基本信息 button, a malformed 发布时间 field) and wiring every Claude Design `{{ noop }}` placeholder to the real `onclick` / id handlers.
+- The **Design page was not part of the exploration doc** (it only covered the Input page); it was built to match the chosen direction, reusing the existing media/notes/position controls and their ids.
+
+**Additional features / changes over v12.1:**
+- **两页信息架构 (two-page IA)**: a top pill switch splits the editor into **输入** (song info + chord timeline + import + project/undo) and **设计** (background audio / image·video / vinyl cover / note names / vertical position). New `switchPage('input'|'design')`.
+- **歌曲信息头 (inline song header)**: BPM / Key / 拍号 / 时间模式 / 曲名 / 编曲 / 人声 / 发布 are inline-editable fields in the Input-page header (ids unchanged: `in-bpm`, `in-key`, `in-title`, …); `应用基本信息` still calls `applyStatic()`.
+- **精简时间轴行 + 行详情 (summary rows + row-detail editor)**: `#timeline-list` now renders compact summary rows (小节·拍 / 秒 · chord · active-degree chips · 承 carry chip · group tag · 备选 flag · ★). Full editing moved to a persistent **行详情** panel on the right that edits the selected row (`selIdx`). New: `renderRows()`, `renderDetail()`, `renderDetailGrid()`, `selectRow(i)`, and detail handlers `detChord / detGroup / detAnnot / detTimeEdit / detToggleDeg / detCarry / detEmph / detPickAlt / detDelete`. `renderList()` = `renderRows()` + `renderDetail()` + `scheduleLive()`, so every existing caller keeps working.
+- **停靠式实时预览 (docked live preview)**: the v12 floating preview panel (`#live-panel`, all child ids preserved) is docked at the top of the Input-page side column; the ⧉ pop-out window and scrub/play controls still work.
+- **Sync model change**: `syncTimelineFromDOM()` and `readTimelineForDisplay()` now flush / overlay the single detail panel for `selIdx` (edits already commit to `timeline[]` through the detail handlers), instead of iterating per-row inputs. `refreshAllHLGrids()` now refreshes summary rows + the detail grid + the HUD.
+- **多选复制保留 (copy-select preserved)**: each summary row keeps a subtle `.tl-checkbox` (`data-idx`) so `复制所选 / 粘贴到末尾` still works; clicking the checkbox no longer selects the row.
+
+**Key functions (v13 additions):**
+| Function | Purpose |
+|---|---|
+| `switchPage(p)` | Toggles the 输入 / 设计 pages and the header pill. |
+| `renderRows()` | Builds the compact summary rows in `#timeline-list` and marks `selIdx` / the live-scrub 播放 row. |
+| `renderDetail()` / `renderDetailGrid()` | Builds the 行详情 editor (and its two-row degree grid) for `timeline[selIdx]`. |
+| `selectRow(i)` | Selects a row for the detail panel. |
+| `detChord/detGroup/detAnnot/detTimeEdit/detToggleDeg/detCarry/detEmph/detPickAlt/detDelete` | Detail-panel edit handlers; operate on `selIdx`, keep `timeline[]` authoritative, re-render rows + HUD + live. |
+| `degChipsHtml(item)` / `esc(s)` | Summary-chip markup helper; HTML/attribute escaper. |
+
+**Preserved contract:** every element id, input id, and inline handler name from v12.1 is unchanged; the HUD output (`drawCanvas`, `drawVinyl`, `DEG_LAYOUT`, `renderHUDDegrees`, WebM/MP4 export) is byte-for-byte identical. Single self-contained `file://` HTML, no new external dependencies.
+
+**saveProject() version:** 4 (unchanged; v12 project files interoperate).
