@@ -319,13 +319,14 @@ Built on v12.1. A **UI redesign of the editor**, imported from **Claude Design**
 
 **Session history (2026-07-09):**
 - Imported the Claude Design exploration doc via the design MCP (`DesignSync.get_file`), chose direction **1c**, and implemented it — fixing the doc's minor inconsistencies (a duplicated 应用基本信息 button, a malformed 发布时间 field) and wiring every Claude Design `{{ noop }}` placeholder to the real `onclick` / id handlers.
+- Layout refined after user feedback: the live preview is a full-height right column (was pushed down under the header/song-info); the 时间模式 button label shortened to 秒数模式 / 小节模式 and the 曲名 label simplified.
 - The **Design page was not part of the exploration doc** (it only covered the Input page); it was built to match the chosen direction, reusing the existing media/notes/position controls and their ids.
 
 **Additional features / changes over v12.1:**
 - **两页信息架构 (two-page IA)**: a top pill switch splits the editor into **输入** (song info + chord timeline + import + project/undo) and **设计** (background audio / image·video / vinyl cover / note names / vertical position). New `switchPage('input'|'design')`.
 - **歌曲信息头 (inline song header)**: BPM / Key / 拍号 / 时间模式 / 曲名 / 编曲 / 人声 / 发布 are inline-editable fields in the Input-page header (ids unchanged: `in-bpm`, `in-key`, `in-title`, …); `应用基本信息` still calls `applyStatic()`.
 - **精简时间轴行 + 行详情 (summary rows + row-detail editor)**: `#timeline-list` now renders compact summary rows (小节·拍 / 秒 · chord · active-degree chips · 承 carry chip · group tag · 备选 flag · ★). Full editing moved to a persistent **行详情** panel on the right that edits the selected row (`selIdx`). New: `renderRows()`, `renderDetail()`, `renderDetailGrid()`, `selectRow(i)`, and detail handlers `detChord / detGroup / detAnnot / detTimeEdit / detToggleDeg / detCarry / detEmph / detPickAlt / detDelete`. `renderList()` = `renderRows()` + `renderDetail()` + `scheduleLive()`, so every existing caller keeps working.
-- **停靠式实时预览 (docked live preview)**: the v12 floating preview panel (`#live-panel`, all child ids preserved) is docked at the top of the Input-page side column; the ⧉ pop-out window and scrub/play controls still work.
+- **停靠式实时预览 (docked live preview)**: the v12 floating preview panel (`#live-panel`, all child ids preserved) is docked at the top of a **full-height right-hand column** that is visible on **both** the 输入 and 设计 pages (so background/cover/position edits preview live); the header actions and song-info sit in the left column beside it. The ⧉ pop-out window and scrub/play controls still work. The 行详情 detail editor sits below the preview and is hidden on the 设计 page.
 - **Sync model change**: `syncTimelineFromDOM()` and `readTimelineForDisplay()` now flush / overlay the single detail panel for `selIdx` (edits already commit to `timeline[]` through the detail handlers), instead of iterating per-row inputs. `refreshAllHLGrids()` now refreshes summary rows + the detail grid + the HUD.
 - **多选复制保留 (copy-select preserved)**: each summary row keeps a subtle `.tl-checkbox` (`data-idx`) so `复制所选 / 粘贴到末尾` still works; clicking the checkbox no longer selects the row.
 

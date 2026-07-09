@@ -772,6 +772,13 @@ body {
 .d-intro { grid-column:1 / -1; color:rgba(255,255,255,0.4); font-size:12px; line-height:1.7; margin:0 0 2px; }
 .d-intro b { color:#c8b4ff; }
 
+
+/* v13 layout fix: full-height right preview column; header+content on the left */
+#editor.v13 { flex-direction: row; }
+#main-col { flex:1; min-width:0; min-height:0; display:flex; flex-direction:column; }
+#editor.v13 #page-input { flex-direction:column; }
+#editor.v13 #side-col { align-self:stretch; }
+#song-head { padding:16px 28px; }
 </style>
 <script>
 "use strict";
@@ -2731,6 +2738,7 @@ if (typeof module === "object" && typeof module.exports === "object") Object.ass
 
 <!-- EDITOR -->
 <div id="editor" class="v13">
+  <div id="main-col">
 
   <!-- ===== HEADER ===== -->
   <div id="ed-head">
@@ -2757,7 +2765,7 @@ if (typeof module === "object" && typeof module.exports === "object") Object.ass
 
     <div id="song-head">
       <div class="sh-titlewrap">
-        <span class="lab" style="font-size:10px;letter-spacing:1px;color:rgba(255,255,255,.3);font-family:'Space Mono',monospace">曲名（点击直改）</span>
+        <span class="lab" style="font-size:10px;letter-spacing:1px;color:rgba(255,255,255,.3);font-family:'Space Mono',monospace">曲名</span>
         <input class="sh-title-in" id="in-title" value="Song Name">
       </div>
       <div class="sh-meta">
@@ -2777,61 +2785,38 @@ if (typeof module === "object" && typeof module.exports === "object") Object.ass
         </div>
         <div class="shm sh-mode">
           <span class="lab">时间模式</span>
-          <button class="timing-toggle-btn bars-active" id="timing-toggle-btn" onclick="toggleTimingMode()">▣ 切换到秒数模式</button>
+          <button class="timing-toggle-btn bars-active" id="timing-toggle-btn" onclick="toggleTimingMode()">秒数模式</button>
         </div>
         <div class="shm"><span class="lab">编曲</span><input class="shm-in" id="in-composer" value="Composer"></div>
         <div class="shm"><span class="lab">人声</span><input class="shm-in" id="in-vocalist" value="Vocal"></div>
         <div class="shm"><span class="lab">发布</span><input class="shm-in" id="in-release" value="0000.00.00" placeholder="2022.03.16"></div>
+        <button class="eb eb-line sh-apply" onclick="applyStatic()">应用基本信息</button>
       </div>
-      <button class="eb eb-line sh-apply" onclick="applyStatic()">应用基本信息</button>
     </div>
 
-    <div id="input-body">
-      <div id="chord-col">
-        <div id="list-tools">
-          <button class="lt strong" onclick="addRow()">＋ 添加和弦</button>
-          <div class="lt-sep"></div>
-          <button class="lt" onclick="showTextImportModal()">📋 粘贴导入</button>
-          <button class="lt" onclick="document.getElementById('midi-input').click()">🎹 MIDI 导入</button>
-          <input id="midi-input" type="file" accept=".mid,.midi" style="display:none" onchange="importMidiFile(this)">
-          <div class="lt-sep"></div>
-          <button class="lt teal" onclick="copySelected()">⬜ 复制所选</button>
-          <button class="lt teal" id="paste-btn" onclick="pasteToEnd()" disabled>📋 粘贴到末尾 (0)</button>
-          <div class="lt-sep"></div>
-          <button class="lt" id="undo-btn" onclick="undo()" disabled title="撤销 (Ctrl+Z)">↩ 撤销</button>
-          <button class="lt" id="redo-btn" onclick="redo()" disabled title="重做 (Ctrl+Y)">↪ 重做</button>
-          <div class="lt-dur"><span>总时长</span><input id="in-total" type="number" min="1" value="6"><span>秒</span></div>
-        </div>
-        <div id="timeline-list"></div>
+    <div id="chord-col">
+      <div id="list-tools">
+        <button class="lt strong" onclick="addRow()">＋ 添加和弦</button>
+        <div class="lt-sep"></div>
+        <button class="lt" onclick="showTextImportModal()">📋 粘贴导入</button>
+        <button class="lt" onclick="document.getElementById('midi-input').click()">🎹 MIDI 导入</button>
+        <input id="midi-input" type="file" accept=".mid,.midi" style="display:none" onchange="importMidiFile(this)">
+        <div class="lt-sep"></div>
+        <button class="lt teal" onclick="copySelected()">⬜ 复制所选</button>
+        <button class="lt teal" id="paste-btn" onclick="pasteToEnd()" disabled>📋 粘贴到末尾 (0)</button>
+        <div class="lt-sep"></div>
+        <button class="lt" id="undo-btn" onclick="undo()" disabled title="撤销 (Ctrl+Z)">↩ 撤销</button>
+        <button class="lt" id="redo-btn" onclick="redo()" disabled title="重做 (Ctrl+Y)">↪ 重做</button>
+        <div class="lt-dur"><span>总时长</span><input id="in-total" type="number" min="1" value="6"><span>秒</span></div>
       </div>
-
-      <div id="side-col">
-        <!-- v12 realtime preview panel — docked here; all ids preserved for JS -->
-        <div id="live-panel">
-          <div id="live-header">
-            <span>🖥 实时预览 · LIVE</span>
-            <span id="live-chord-label"></span>
-            <span style="flex:1"></span>
-            <button class="live-hbtn" onclick="popOutLive()" title="弹出为独立窗口——可拖到浏览器外 / 其他显示器">⧉ 弹出</button>
-            <button class="live-hbtn" onclick="toggleLivePanel()" title="隐藏（顶部『🖥 实时预览』可再次打开）">✕</button>
-          </div>
-          <canvas id="live-canvas" width="1920" height="1080"></canvas>
-          <div id="live-controls">
-            <button id="live-play-btn" class="live-hbtn" onclick="toggleLivePlay()" title="从当前位置播放 / 暂停（含音频）">▶</button>
-            <input type="range" id="live-scrub" min="0" max="30" step="0.01" value="0" oninput="onLiveScrub(this.value)">
-            <span id="live-time">0:00.0 / 0:30</span>
-          </div>
-        </div>
-        <div id="det-divider"></div>
-        <div id="detail-panel"></div>
-      </div>
+      <div id="timeline-list"></div>
     </div>
   </div>
 
   <!-- ===== DESIGN PAGE ===== -->
   <div class="v13-page" id="page-design">
     <div id="design-wrap">
-      <p class="d-intro">这些设置决定 <b>HUD 画面的外观</b>——背景、封面唱片、音名与和弦位置。改动实时反映在『输入』页的预览窗，并写入最终导出。</p>
+      <p class="d-intro">这些设置决定 <b>HUD 画面的外观</b>——背景、封面唱片、音名与和弦位置。改动实时反映在右侧预览窗，并写入最终导出。</p>
 
       <div class="dcard">
         <h3>背景音频</h3>
@@ -2903,6 +2888,30 @@ if (typeof module === "object" && typeof module.exports === "object") Object.ass
     </div>
   </div>
 
+  </div><!-- /main-col -->
+
+  <!-- ===== RIGHT: full-height preview + row detail ===== -->
+  <div id="side-col">
+    <!-- v12 realtime preview panel — docked; all ids preserved for JS -->
+    <div id="live-panel">
+      <div id="live-header">
+        <span>🖥 实时预览 · LIVE</span>
+        <span id="live-chord-label"></span>
+        <span style="flex:1"></span>
+        <button class="live-hbtn" onclick="popOutLive()" title="弹出为独立窗口——可拖到浏览器外 / 其他显示器">⧉ 弹出</button>
+        <button class="live-hbtn" onclick="toggleLivePanel()" title="隐藏（顶部『🖥 实时预览』可再次打开）">✕</button>
+      </div>
+      <canvas id="live-canvas" width="1920" height="1080"></canvas>
+      <div id="live-controls">
+        <button id="live-play-btn" class="live-hbtn" onclick="toggleLivePlay()" title="从当前位置播放 / 暂停（含音频）">▶</button>
+        <input type="range" id="live-scrub" min="0" max="30" step="0.01" value="0" oninput="onLiveScrub(this.value)">
+        <span id="live-time">0:00.0 / 0:30</span>
+      </div>
+    </div>
+    <div id="det-divider"></div>
+    <div id="detail-panel"></div>
+  </div>
+
 </div>
 
 
@@ -2965,7 +2974,7 @@ if (typeof module === "object" && typeof module.exports === "object") Object.ass
     <div class="help-section">
       <div class="help-h">③ 时间模式与拍号</div>
       <ul>
-        <li><b>秒 ↔ 小节·拍</b>：点左侧 <b>『♩ 切换到小节模式』</b> 可用「第几小节·第几拍」输入；内部仍按 BPM 自动换算为秒。</li>
+        <li><b>秒 ↔ 小节·拍</b>：点左侧 <b>『小节模式』</b> 可用「第几小节·第几拍」输入；内部仍按 BPM 自动换算为秒。</li>
         <li><b>拍号按钮</b>（2/4 – 7/4 或自定义）决定每小节拍数；改 BPM / 拍号会自动重算小节模式下的时间。</li>
       </ul>
     </div>
@@ -3138,12 +3147,12 @@ function toggleTimingMode() {
       const { bar, beat } = secondsToBarBeat(e.time);
       e.bar = bar; e.beat = beat;
     });
-    btn.textContent = '▣ 切换到秒数模式';
+    btn.textContent = '秒数模式';
     btn.classList.add('bars-active');
   } else {
     timingMode = 'seconds';
     timeline.forEach(e => { e.time = barBeatToSeconds(e.bar || 1, e.beat || 1); });
-    btn.textContent = '♩ 切换到小节模式';
+    btn.textContent = '小节模式';
     btn.classList.remove('bars-active');
   }
   renderList();
@@ -3550,7 +3559,10 @@ function switchPage(p) {
   document.getElementById('page-design').classList.toggle('on', p === 'design');
   document.getElementById('pill-input').classList.toggle('on', p === 'input');
   document.getElementById('pill-design').classList.toggle('on', p === 'design');
-  if (p === 'input') scheduleLive();
+  const showDetail = (p === 'input');
+  const dp = document.getElementById('detail-panel'); if (dp) dp.style.display = showDetail ? '' : 'none';
+  const dv = document.getElementById('det-divider'); if (dv) dv.style.display = showDetail ? '' : 'none';
+  scheduleLive();
 }
 
 function esc(s) {
@@ -4999,8 +5011,8 @@ function loadProject(input) {
         timingMode = data.timingMode;
         beatsPerBar = data.beatsPerBar || 4;
         const btn = document.getElementById('timing-toggle-btn');
-        if (timingMode === 'bars') { btn.textContent='▣ 切换到秒数模式'; btn.classList.add('bars-active'); }
-        else                       { btn.textContent='♩ 切换到小节模式'; btn.classList.remove('bars-active'); }
+        if (timingMode === 'bars') { btn.textContent='秒数模式'; btn.classList.add('bars-active'); }
+        else                       { btn.textContent='小节模式'; btn.classList.remove('bars-active'); }
         if (data.beatsPerBar) document.getElementById('in-bpb').value = data.beatsPerBar;
         document.querySelectorAll('.ts-btn').forEach(btn => { btn.classList.toggle('active', parseInt(btn.dataset.n) === beatsPerBar); });
       }
