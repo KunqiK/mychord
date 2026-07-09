@@ -2,7 +2,7 @@
 
 A browser-based chord/progression HUD designed for video overlay (1920×1080, black background, Screen blending mode). Each version is a single self-contained HTML file; new features are always built into a **new** file (`chord_hud_vN.html`) — the previous version is never modified.
 
-**Current version: `chord_hud_v14.html`**
+**Current version: `chord_hud_v15.html`**
 
 All ChordHUD documentation lives in this file (moved out of CLAUDE.md on 2026-07-01). Record all future ChordHUD changes here.
 
@@ -367,3 +367,19 @@ Built on v13. Adds a **中文 / English UI language toggle**. **The rendered HUD
 **Data:** `I18N_PAIRS` (static zh↔en pairs), `I18N_RICH` (innerHTML blocks).
 
 **saveProject() version:** 4 (unchanged; UI language is a local preference, not stored in the project file).
+
+---
+
+### chord_hud_v15.html
+Built on v14. Adds a **Key quick-select** to the 音名 / Note-names section: pick a major or minor key and the 12 note-name cells auto-fill with correct, traditionally-spelled note names — no more hand-typing. v14 was not modified.
+
+**Session (2026-07-09):**
+- New `<select id="key-select">` in the note-names card (Design page): grouped **Major** (C, Db, D, Eb, E, F, F#, Gb, G, Ab, A, Bb, B) and **Minor** (Cm…Bm), plus a 自定义 / Custom entry. `applyKeyPreset('root|mode')` fills `globalNotes`, syncs the ♭ / ♯ degree labels to the key's direction, and reflects the key on the HUD (sets the KEY field + `applyStatic()`). Editing any note cell resets the selector to Custom.
+- **Spelling engine** `keyNotes(root, mode)` (verified in Node across all 25 keys — no double accidentals):
+  - **Diatonic 7 notes** spelled from the key signature — one letter per degree, accidental computed — so flat keys keep proper spelling (**F major → Bb**, not A#; Gb major legitimately → Cb) and no key is mis-named (**Bb major uses Bb/Eb**, never "A# major").
+  - **Chromatic 5 notes** take the minimal accidental: natural where the pitch is a white key (so F major's tritone reads **B**, not Cb), otherwise a single sharp/flat leaning the key's flat/sharp side. Minor keys raise the 6th/7th (A minor → **F# / G#**); leading tones use a clean natural rather than B#/F##.
+- The label is bilingual (i18n `调（快速填充音名）` / "Key (quick-fill notes)"); options are language-neutral. All element ids / handlers preserved; the HUD output renderer is unchanged.
+
+**Key functions (v15 additions):** `keyNotes(root, mode)`, `applyKeyPreset(val)`, `_accStr(letter, pc)`; data `_KEY_SHARPS`, `_NOTE_PC`, `_SHARP_PC` / `_FLAT_PC`.
+
+**saveProject() version:** 4 (unchanged).
