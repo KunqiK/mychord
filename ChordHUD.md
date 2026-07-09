@@ -2,7 +2,7 @@
 
 A browser-based chord/progression HUD designed for video overlay (1920×1080, black background, Screen blending mode). Each version is a single self-contained HTML file; new features are always built into a **new** file (`chord_hud_vN.html`) — the previous version is never modified.
 
-**Current version: `chord_hud_v15.html`**
+**Current version: `chord_hud_v16.html`**
 
 All ChordHUD documentation lives in this file (moved out of CLAUDE.md on 2026-07-01). Record all future ChordHUD changes here.
 
@@ -381,5 +381,19 @@ Built on v14. Adds a **Key quick-select** to the 音名 / Note-names section: pi
 - The label is bilingual (i18n `调（快速填充音名）` / "Key (quick-fill notes)"); options are language-neutral. All element ids / handlers preserved; the HUD output renderer is unchanged.
 
 **Key functions (v15 additions):** `keyNotes(root, mode)`, `applyKeyPreset(val)`, `_accStr(letter, pc)`; data `_KEY_SHARPS`, `_NOTE_PC`, `_SHARP_PC` / `_FLAT_PC`.
+
+**saveProject() version:** 4 (unchanged).
+
+---
+
+### chord_hud_v16.html
+Built on v15. **UI polish of the note-names / key section**: the note-name editor now uses the same two-row piano layout as 高亮音级 (7 in-key on top, 5 chromatic in the gaps below), and the outdated native `<select>` key dropdown is replaced by a themed picker. v15 was not modified.
+
+**Session (2026-07-09):**
+- **Two-row note editor** — `renderNoteGrid()` now lays the 12 editable cells out like the HUD / 高亮音级 grid: a 14-column grid with the 7 diatonic degrees spanning 2 columns on row 1 and the 5 chromatic degrees straddling the gaps on row 2 (diatonic cells purple, chromatic amber).
+- **Themed key picker** (replaces the native dropdown that rendered as an OS-styled list): a **大调 / 小调** (Major / Minor) segmented toggle + a 7-column grid of key buttons. The active key is highlighted; editing any note cell clears it to Custom. New: globals `keyMode` / `activeKey` / `KEY_ROOTS`; functions `setKeyMode()`, `renderKeyBtns()`, `onNoteEdit()`. `applyKeyPreset()` and the v15 spelling engine are unchanged. The mode-toggle labels are bilingual (i18n `大调`/`小调` ↔ Major/Minor).
+- All element ids / handlers preserved; the note spelling and HUD output are unchanged.
+
+**Key functions (v16 additions):** `setKeyMode(m)`, `renderKeyBtns()`, `onNoteEdit()` (+ rewritten `renderNoteGrid()`).
 
 **saveProject() version:** 4 (unchanged).

@@ -20,6 +20,6 @@ A workspace for projects built and refined with Claude Code.
 ## Projects
 
 ### ChordHUD
-A browser-based chord/progression HUD designed for video overlay (1920×1080, black background, Screen blending mode). Latest version: **`chord_hud_v15.html`**.
+A browser-based chord/progression HUD designed for video overlay (1920×1080, black background, Screen blending mode). Latest version: **`chord_hud_v16.html`**.
 
 Full documentation — version history (v4 → v12), features, and key-function reference — lives in **[ChordHUD.md](ChordHUD.md)**. Record all ChordHUD changes there, not here.
