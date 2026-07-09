@@ -779,6 +779,49 @@ body {
 #editor.v13 #page-input { flex-direction:column; }
 #editor.v13 #side-col { align-self:stretch; }
 #song-head { padding:16px 28px; }
+
+/* ── v13: responsive header + subtle scrollbars (feedback pass 2) ── */
+/* Header wraps to a new line instead of overflowing when space is tight */
+#ed-head { flex-wrap: wrap; height: auto; min-height: 60px; padding: 8px 22px; gap: 10px; row-gap: 8px; align-content: center; }
+
+/* Thin, theme-matched scrollbars — replaces the default white bar, scroll still works */
+#editor.v13 * { scrollbar-width: thin; scrollbar-color: rgba(140,90,255,0.33) transparent; }
+#editor.v13 ::-webkit-scrollbar { width: 10px; height: 10px; }
+#editor.v13 ::-webkit-scrollbar-track { background: transparent; }
+#editor.v13 ::-webkit-scrollbar-thumb { background: rgba(140,90,255,0.30); border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }
+#editor.v13 ::-webkit-scrollbar-thumb:hover { background: rgba(140,90,255,0.52); background-clip: padding-box; }
+#editor.v13 ::-webkit-scrollbar-corner { background: transparent; }
+#page-design { overflow-x: hidden; }
+
+/* Progressive tightening so high browser-zoom / narrow windows don't cram or overflow */
+@media (max-width: 1240px) {
+  #side-col { width: 372px; }
+  .sh-meta { gap: 16px; }
+}
+@media (max-width: 1040px) {
+  #side-col { width: 320px; }
+  #chord-col { padding-left: 20px; }
+  #song-head { padding: 14px 18px; gap: 18px; }
+  .eb-sm { padding: 6px 10px; }
+  #design-wrap { padding: 22px; }
+}
+@media (max-width: 900px) {
+  #side-col { width: 268px; }
+  #ed-head { padding: 8px 16px; gap: 10px; }
+  .eb { padding: 7px 11px; font-size: 12px; }
+  .lt { padding: 6px 8px; }
+  .lt-sep { margin: 0 4px; }
+  #design-wrap { grid-template-columns: 1fr; }
+  .sh-title-in { width: 170px; }
+}
+
+
+/* v13: let the docked preview controls shrink instead of overflowing at narrow widths */
+#editor.v13 #live-scrub { min-width: 0; }
+#editor.v13 #live-controls { min-width: 0; }
+#editor.v13 #live-header { overflow: hidden; }
+#editor.v13 #live-header > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+#editor.v13 #live-chord-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 </style>
 <script>
 "use strict";
@@ -2754,9 +2797,9 @@ if (typeof module === "object" && typeof module.exports === "object") Object.ass
     <button class="eb eb-green eb-sm" onclick="document.getElementById('load-input').click()">📂 导入</button>
     <input id="load-input" type="file" accept=".json" style="display:none" onchange="loadProject(this)">
     <button class="eb eb-teal eb-sm" id="help-btn" onclick="showHelpModal()" title="新手指南 / 功能说明">❓ 帮助</button>
-    <button class="eb eb-sm" id="live-toggle-btn" onclick="toggleLivePanel()" title="显示/隐藏实时预览小窗">🖥 实时预览</button>
+    <button class="eb eb-sm" id="live-toggle-btn" onclick="toggleLivePanel()" title="显示/隐藏实时预览小窗（预览已常驻右栏）">🖥</button>
     <button class="eb eb-line" onclick="previewHUD()">▶ 预览</button>
-    <button class="eb eb-fill" onclick="startExportMp4()" title="MP4 (H.264) — 推荐，兼容 DaVinci Resolve；已加载的背景音频会一并写入">⬇ 导出 MP4</button>
+    <button class="eb eb-fill" onclick="startExportMp4()" title="MP4 (H.264) — 推荐，兼容 DaVinci Resolve；已加载的背景音频会一并写入">⬇ MP4</button>
     <button class="eb eb-orange eb-sm" onclick="startExport()" title="WebM (VP9) — DaVinci Resolve Windows 版不支持此格式">⬇ WebM</button>
   </div>
 
