@@ -2,7 +2,7 @@
 
 A browser-based chord/progression HUD designed for video overlay (1920×1080, black background, Screen blending mode). Each version is a single self-contained HTML file; new features are always built into a **new** file (`chord_hud_vN.html`) — the previous version is never modified.
 
-**Current version: `chord_hud_v16.html`**
+**Current version: `chord_hud_v17.html`**
 
 All ChordHUD documentation lives in this file (moved out of CLAUDE.md on 2026-07-01). Record all future ChordHUD changes here.
 
@@ -397,3 +397,30 @@ Built on v15. **UI polish of the note-names / key section**: the note-name edito
 **Key functions (v16 additions):** `setKeyMode(m)`, `renderKeyBtns()`, `onNoteEdit()` (+ rewritten `renderNoteGrid()`).
 
 **saveProject() version:** 4 (unchanged).
+
+---
+
+### chord_hud_v17.html
+Built on v16. Adds a **数拍子 (beat-counter) HUD element** and support for **mid-song time-signature changes (拍号变化 / meter map)**. v16 was not modified.
+
+**Session (2026-07-12):**
+- **数拍子 beat counter (new HUD element)**: a metronome-style row of beat pips at the **top centre** of the HUD, drawn by `drawBeatCounter(ctx, elapsed)` inside `drawCanvas` — so preview, the docked/pop-out live panel, and both WebM/MP4 exports all show it identically. The current beat is enlarged and **pulses on each onset** (`pulse = (1 − beatPhase·1.8)^1.5`); **beat 1 (the downbeat) is amber** so bar boundaries read at a glance; past beats in the bar are dimly filled, upcoming beats outlined. A label line below reads `N/4 · 小节 <bar> · 第 <beat> 拍` (bilingual). Toggle with the **显示数拍子** checkbox on the Design page (`beatCounterOn`, default on). All light-on-black so it survives the Screen-blend export.
+- **拍号变化 meter map (mid-song time-signature changes)**: `meterMap = [{startBar, beatsPerBar}, …]` — a sorted list of meter segments; the first always starts at bar 1 (the opening metre, mirrored into the global `beatsPerBar`). `barBeatToSeconds` / `secondsToBarBeat` are now **meter-map aware** (they walk the segments), so a song that switches e.g. 4/4 → 3/4 from bar 9 converts bar·beat ↔ seconds correctly. **Backward compatible**: with a single default segment the math is byte-identical to v16, and old project files (no `meterMap`) fall back to one segment built from `beatsPerBar`. BPM is still a single global (beat duration = 60/BPM); only the beat grouping changes per segment.
+- **Meter-change editor** (Design page card "数拍子 / 拍号变化"): a checkbox to show/hide the beat counter, plus a list of segments — each row is "从第 N 小节起 · 每小节 X 拍" with a ✕ delete (the opening bar-1 row is fixed and set by the header 拍号 buttons). `＋ 添加拍号变化` appends a segment. Editing any segment recomputes all timeline entry times (in bars mode), refreshes the disc speed, the row list and the live preview.
+- The header **拍号 buttons** (2/4–7/4) now set the **opening** segment (`meterMap[0]`); `setTimeSig`, `toggleTimingMode`, and `loadProject` keep `meterMap[0].beatsPerBar` in sync with the global `beatsPerBar`. Meter edits are **not** part of the timeline undo stack (undo is timeline-only, unchanged).
+- i18n: new static strings added to `I18N_PAIRS`; `renderMeterList()` uses `tr()` and is re-run by `setLang()`; the beat-counter label reads `LANG` live. Help sections ③ (zh + en) document the feature.
+
+**Key functions (v17 additions):**
+| Function | Purpose |
+|---|---|
+| `beatStateAt(t)` | Returns `{bar, beatIndex, beatPhase, beatsPerBar}` at time `t`, walking `meterMap`. Drives the beat counter. |
+| `drawBeatCounter(ctx, elapsed)` | Renders the top-centre beat-pip row + label; no-op when `beatCounterOn` is false. |
+| `beatsBeforeBar(bar)` / `meterAtBar(bar)` | Meter-map helpers: total beats before a bar's downbeat / beats-per-bar in effect at a bar. |
+| `sortMeterMap()` | Normalises `meterMap` (sort, guarantee bar-1 segment, dedupe, mirror opening metre into `beatsPerBar`). |
+| `renderMeterList()` | Builds the meter-change editor rows. |
+| `addMeterChange()` / `removeMeterChange(i)` / `setMeterBar(i,v)` / `setMeterBpb(i,v)` | Editor handlers; each ends in `commitMeter()`. |
+| `commitMeter()` | Re-sorts, recomputes entry times (bars mode), re-syncs 拍号 buttons/disc/row list/live. |
+| `toggleBeatCounter(on)` | Shows/hides the beat counter. |
+| `barBeatToSeconds` / `secondsToBarBeat` | Rewritten to be meter-map aware (single-segment behaviour identical to v16). |
+
+**saveProject() version:** 4 (unchanged; adds `meterMap` + `beatCounterOn` additively — v16 and older project files load fine, and v17 files load in older versions ignoring the new fields).
