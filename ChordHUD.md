@@ -424,3 +424,21 @@ Built on v16. Adds a **数拍子 (beat-counter) HUD element** and support for **
 | `barBeatToSeconds` / `secondsToBarBeat` | Rewritten to be meter-map aware (single-segment behaviour identical to v16). |
 
 **saveProject() version:** 4 (unchanged; adds `meterMap` + `beatCounterOn` additively — v16 and older project files load fine, and v17 files load in older versions ignoring the new fields).
+
+---
+
+### chord_hud_v17.1.html
+Built on v17. A five-part editor + HUD upgrade. v17 was not modified.
+
+**Session (2026-07-12):**
+- **Free HUD layout — drag & resize on the preview (Task 1)**: every HUD element now has a per-element `{dx,dy,scale}` override in the global `hudLayout` (keys: `bpmkey`, `songinfo`, `beat`, `chord`+annotation, `degrees`, `vinyl`). In `drawCanvas`, each element draws through `hudEl(ctx,key,ax,ay,bx,by,bw,bh,drawFn)` which applies a translate-about-anchor + scale transform **and** records the element's base (untransformed) bbox in `_hudBox` for hit-testing. On the live-canvas: **drag** to move, **mouse-wheel** over an element to resize (0.35–3×), **double-click** to reset one element; cursor shows grab/grabbing. `hudHitTest(px,py)` inverse-transforms the pointer against each recorded bbox (topmost-first via `HUD_HIT_ORDER`). The same layout is mirrored onto the DOM fullscreen preview (`▶ 预览`) via `applyHudLayoutDOM()` (CSS transforms on `#top-left/#top-right/#chord-display/#chord-annotation/#degree-rows/#vinyl-wrap`). A design-page card "HUD 布局（自由摆放）" documents it and has a **重置所有 HUD 布局** button (`resetHudLayout()`). The progress bar stays fixed (full-width baseline).
+- **Theme-consistent design inputs (Task 2)**: native `<select>`, checkbox and range widgets on the editor are now themed with `appearance:none` — a purple SVG chevron for selects, a custom purple checkmark box for checkboxes (`#editor input[type=checkbox]`), and a gradient track + glowing thumb for ranges. No more OS-styled controls.
+- **Removed the ♭/♯ accidental buttons (Task 3)**: the `.acc-row` on the note-names card is gone (the v15/v16 key picker already sets flat/sharp spelling per key). `setAccidental`, `renderNoteGrid` and `applyKeyPreset` were made null-safe; `loadProject(data.accidental)` still works.
+- **Global transpose / change key (Task 4)**: a **移调** control next to KEY (`♭ −` / `＋ ♯`) calls `transposeAll(semi)`, which shifts every chord's root + slash-bass (`transposeChordStr`), the KEY label and the 12 note names by ±1 semitone. Scale-degree highlights (`item.active`) are relative to the key root, so only the note *names* change. When a preset key is active it re-derives diatonic-correct spelling via `applyKeyPreset`; otherwise it re-spells the note names directly. `activeKey` is now saved/loaded so spelling direction survives a round-trip.
+- **Resizable preview / zoom-in enlarges it (Task 5)**: `#side-col` width is now the CSS var `--side-w` (capped at 74vw), and the media queries that used to *shrink* it were removed — so zooming the browser in now makes the docked preview bigger, not smaller. New **⊖/⊕** buttons in the preview header (`nudgePreview`/`setPreviewWidth`) size it directly; the choice persists in `localStorage` (`chordhud_preview_w`).
+
+**Key functions (v17.1 additions):** `hudEl()`, `hudHitTest()`, `applyHudLayoutDOM()`, `resetHudLayout()` / `resetHudEl()`, `initHudDrag()`, `defaultHudLayout()`; `transposeAll()`, `transposeChordStr()`, `_shiftNoteToken()`, `_spellPC()`, `_transposeKeyLabel()`; `setPreviewWidth()` / `nudgePreview()`.
+
+**saveProject() version:** 5 (adds `hudLayout`, `activeKey`, `previewWidth` additively — older files load fine with defaults; v17.1 files load in older versions ignoring the new fields).
+
+**Verification:** ran headless in Chromium (Playwright) — no console errors; confirmed transpose (C→Db→C round-trip, correct re-spelling), preview-size buttons (`--side-w` 460→580px), all six HUD element bboxes recorded + hit-test at original and dragged positions, real mouse-drag + wheel-resize move/scale the chord, and EN i18n for the new strings.
