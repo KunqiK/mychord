@@ -2,7 +2,7 @@
 
 A browser-based chord/progression HUD designed for video overlay (1920×1080, black background, Screen blending mode). Each version is a single self-contained HTML file; new features are always built into a **new** file (`chord_hud_vN.html`) — the previous version is never modified.
 
-**Current version: `chord_hud_v17.html`**
+**Current version: `chord_hud_v17.2.html`**
 
 All ChordHUD documentation lives in this file (moved out of CLAUDE.md on 2026-07-01). Record all future ChordHUD changes here.
 
@@ -442,3 +442,20 @@ Built on v17. A five-part editor + HUD upgrade. v17 was not modified.
 **saveProject() version:** 5 (adds `hudLayout`, `activeKey`, `previewWidth` additively — older files load fine with defaults; v17.1 files load in older versions ignoring the new fields).
 
 **Verification:** ran headless in Chromium (Playwright) — no console errors; confirmed transpose (C→Db→C round-trip, correct re-spelling), preview-size buttons (`--side-w` 460→580px), all six HUD element bboxes recorded + hit-test at original and dragged positions, real mouse-drag + wheel-resize move/scale the chord, and EN i18n for the new strings.
+
+---
+
+### chord_hud_v17.2.html
+Built on v17.1. Single feature: **drag-to-reorder timeline rows**. v17.1 was not modified.
+
+**Session (2026-07-23):**
+- **⠿ 拖拽排序**: each timeline row now starts with a `⠿` drag handle (`.vc-drag`, dim by default, purple on row hover). Hold it and drag a row up/down to move that chord to any other position — e.g. drag row 2 onto row 4.
+- **Semantics — the time grid stays fixed**: only the chord *content* (chord name, degrees, annotation, group, carry, emphasis, alts) reorders across the existing time slots; each slot keeps its `time`/`bar`/`beat`, so the song's timing is never disturbed. Chords between source and destination shift by one automatically (splice insert, not swap).
+- **Interaction details**: HTML5 DnD, armed only from the handle (`mousedown` sets `row.draggable = true`) so plain clicks still select the row and the checkbox still works. While dragging, the source row dims (`.dragging`) and a teal insertion line (`.drop-above` / `.drop-below`, chosen by cursor vs row midpoint) previews the drop slot. Drop cleans up *before* the re-render since `dragend` may not fire on detached rows. The move goes through `pushHistory()` (undo/redo works) and `recomputeGroupCarries()`; the moved row becomes the selected row.
+- **Help modal**: new ⠿ 拖拽 / ⠿ Drag bullet in section ② of both `#help-zh` and `#help-en`.
+
+**Key functions (v17.2 additions):** `rowDragStart()` / `rowDragOver()` / `rowDrop()` / `rowDragEnd()` / `clearDropMarks()`; `moveRow(from, insertAt)` (insertion-slot splice semantics; reassigns fixed time slots onto the reordered payloads).
+
+**saveProject() version:** 5 (unchanged — no data-format change).
+
+**Verification:** headless Chromium (Playwright, real mouse DnD) — no console errors; dragged row 2 → slot 4 (contents shifted up, times 0/1.37/2.74/4.11s unchanged), dragged row 4 → slot 1, undo restored the original order both times, and a plain row click still only selects (no reorder).
