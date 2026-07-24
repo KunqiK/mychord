@@ -2,7 +2,7 @@
 
 A browser-based chord/progression HUD designed for video overlay (1920×1080, black background, Screen blending mode). Each version is a single self-contained HTML file; new features are always built into a **new** file (`chord_hud_vN.html`) — the previous version is never modified.
 
-**Current version: `chord_hud_v17.3.html`**
+**Current version: `chord_hud_v17.4.html`**
 
 All ChordHUD documentation lives in this file (moved out of CLAUDE.md on 2026-07-01). Record all future ChordHUD changes here.
 
@@ -475,3 +475,20 @@ Built on v17.2. Single feature: **整段重复 ×N on paste-import**, plus an em
 **saveProject() version:** 5 (unchanged — no data-format change).
 
 **Verification:** headless Chromium (Playwright) — `Am F C G` ×4 → 16 rows at even BPM spacing, `| Am | F | C | G |` ×3 via the real modal button → 12 rows, one undo removes the whole import, repeat field resets to 1; empty timeline renders with no console errors; EN labels verified.
+
+---
+
+### chord_hud_v17.4.html
+Built on v17.3. Single feature: **bigger row checkboxes + shift-click range selection**. v17.3 was not modified.
+
+**Session (2026-07-23):**
+- **Bigger checkbox, bigger hit area**: the row checkbox is now 20×20px (`#editor .vc-row input.vc-cbx[type=checkbox]`, checkmark ::after re-positioned) and sits inside a new `.vc-cbxwrap` span whose 9px padding + matching negative margin gives a 38×38px click zone without shifting the row layout. Default opacity raised 0.25 → 0.45 so the boxes are discoverable before hover.
+- **Shift-click range selection**: `cbxWrapClick(e, i)` handles all checkbox clicks (padding clicks toggle manually; direct input clicks use the native toggle). With Shift held, every box between the last-clicked index (`lastCbxIdx`) and the current one is set to the clicked box's new state — so shift-click both selects *and* clears ranges. The anchor resets on every re-render (checkboxes are cleared then anyway).
+- **Selected-count feedback**: the 复制所选 button (now `#copy-btn`) live-updates to 「⬜ 复制所选 (n)」 via `updateCopyBtn()`.
+- **Help**: the ☑ / ✕ bullet in section ② (both languages) documents shift-click and the count display.
+
+**Key functions (v17.4 additions):** `cbxWrapClick()`, `updateCopyBtn()`; `renderRows()` (wrap markup, anchor reset), row `onclick` guard now `closest('.vc-cbxwrap')`.
+
+**saveProject() version:** 5 (unchanged — no data-format change).
+
+**Verification:** headless Chromium (Playwright) — padding-click toggles a box; shift-click 0→5 checks all six and the button shows (6); shift-click on 2 clears 2–5 leaving (2); checkbox clicks never change the selected row; copy+paste of a shift-selected range appends correctly; checkbox 20×20 with a 38×38 hit area; checkmark alignment verified by screenshot; no console errors.
