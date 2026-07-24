@@ -2,7 +2,7 @@
 
 A browser-based chord/progression HUD designed for video overlay (1920×1080, black background, Screen blending mode). Each version is a single self-contained HTML file; new features are always built into a **new** file (`chord_hud_vN.html`) — the previous version is never modified.
 
-**Current version: `chord_hud_v17.2.html`**
+**Current version: `chord_hud_v17.3.html`**
 
 All ChordHUD documentation lives in this file (moved out of CLAUDE.md on 2026-07-01). Record all future ChordHUD changes here.
 
@@ -459,3 +459,19 @@ Built on v17.1. Single feature: **drag-to-reorder timeline rows**. v17.1 was not
 **saveProject() version:** 5 (unchanged — no data-format change).
 
 **Verification:** headless Chromium (Playwright, real mouse DnD) — no console errors; dragged row 2 → slot 4 (contents shifted up, times 0/1.37/2.74/4.11s unchanged), dragged row 4 → slot 1, undo restored the original order both times, and a plain row click still only selects (no reorder).
+
+---
+
+### chord_hud_v17.3.html
+Built on v17.2. Single feature: **整段重复 ×N on paste-import**, plus an empty-timeline crash fix. v17.2 was not modified.
+
+**Session (2026-07-23):**
+- **整段重复 ×N**: the 📋 粘贴导入 modal gains a third row — 「整段重复 __ 遍」 (`#text-import-repeat`, 1–99, default 1). `doTextImport()` repeats the whole parsed chord sequence N times back-to-back before generating entries, so a looped section (`Am F C G`, ×4) imports as 16 consecutive rows in one go instead of being pasted repeatedly. The input resets to 1 after each import; the whole import is still a single undo step.
+- **Empty-timeline crash fix (pre-existing since v17)**: `drawCanvas()` read `timeline[idx].group` unguarded, so deleting every row crashed the live preview each frame (`TypeError … reading 'group'`). `item` now falls back to an empty placeholder — background, beat counter and progress bar still draw; chord/degrees are simply blank.
+- **i18n / help**: new pairs 整段重复 → "Repeat sequence", 遍（副歌 / 循环段落一次生成） → "times (loop a section)"; the 📋 粘贴导入 bullet in help section ④ (both languages) documents the option.
+
+**Key functions:** `doTextImport()` (repeat expansion), `drawCanvas()` (guard). No new functions.
+
+**saveProject() version:** 5 (unchanged — no data-format change).
+
+**Verification:** headless Chromium (Playwright) — `Am F C G` ×4 → 16 rows at even BPM spacing, `| Am | F | C | G |` ×3 via the real modal button → 12 rows, one undo removes the whole import, repeat field resets to 1; empty timeline renders with no console errors; EN labels verified.
