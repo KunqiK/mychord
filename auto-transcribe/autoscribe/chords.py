@@ -32,17 +32,24 @@ N_IDX = N_STATE - 1
 
 # ── tuning constants ──
 NON_TEMPLATE_PENALTY = 0.7          # per unit chroma mass outside the template
-BASS_ROOT_BONUS = 1.2               # x bass conf, when bass pc == root
+BASS_ROOT_BONUS = 2.0               # x bass conf, when bass pc == root
 BASS_TONE_BONUS = 0.6               # x bass conf, when bass pc is another chord tone
+BASS_MISS_PENALTY = 0.6             # x bass conf, when bass pc is NOT a chord tone
 EMIT_TEMP = 0.35                    # divide scores by this → log-emission scale
-CHANGE_COST = 4.5                   # base log-cost of switching chords
+CHANGE_COST = 6.0                   # base log-cost of switching chords
 CHANGE_MULT = {'downbeat': 0.4, 'midbar': 0.7, 'beat': 1.0, 'offbeat': 1.6}
-N_ENERGY_FLOOR = 0.35               # below this (x median energy) N looks likely
-MIN_SEG_BEATS = 1.0                 # absorb shorter segments into neighbors
+ENERGY_DAMP_FLOOR = 0.25            # quiet-but-structured frames keep >=sqrt(.25) weight
+N_ENERGY_FLOOR = 0.15               # N needs BOTH low energy (x median) ...
+N_STRUCTURE_FLOOR = 2.0             # ... and flat chroma (1/mean of max-normed chroma)
+MIN_SEG_BEATS = 2.0                 # absorb shorter segments into neighbors
 PC_KEEP = 0.4                       # stage-2: keep pcs with chroma >= this
 PC_KEEP_TMPL = 0.25                 # ...or template tones above this
 PC_CAP = 6
-BASS_STABLE_FRAC = 0.6              # modal bass must cover this to make a slash
+BASS_STABLE_FRAC = 0.5              # modal bass must cover this to be trusted
+BASS_CONF_MIN = 0.35                # ...at at least this mean pyin confidence
+STAGE2_BASS_ROOT_BONUS = 1.5        # stage-2 candidates rooted on the bass pc
+EXOTIC_SFX = {'7b9', '7#9', 'mMaj7', 'augMaj7'}   # rarely correct on dirty chroma
+EXOTIC_PENALTY = 0.8                # prior against exotic labels in ties
 
 
 def _emissions(chroma: np.ndarray, energy: np.ndarray, bass: dict) -> np.ndarray:
@@ -51,7 +58,10 @@ def _emissions(chroma: np.ndarray, energy: np.ndarray, bass: dict) -> np.ndarray
     scores = np.zeros((F, N_STATE))
     bass_pc = np.asarray(bass['pc'])
     bass_conf = np.asarray(bass['conf'])
-    energy_damp = np.sqrt(np.clip(energy, 0.0, 1.5))
+    # damp quiet frames only mildly: chroma is max-normalized, so a quiet but
+    # harmonically clear intro still deserves a chord (the N state handles
+    # true silence via the structure test below)
+    energy_damp = np.sqrt(np.clip(energy, ENERGY_DAMP_FLOOR, 1.5))
     for qi, (_name, ivs) in enumerate(CORE_QUALITIES):
         w = np.array([INTERVAL_WEIGHTS[iv] for iv in ivs])
         for root in range(12):
@@ -62,9 +72,14 @@ def _emissions(chroma: np.ndarray, energy: np.ndarray, bass: dict) -> np.ndarray
             s = s - NON_TEMPLATE_PENALTY * chroma[~mask, :].sum(axis=0)
             s = s * energy_damp
             bb = np.where(bass_pc == root, BASS_ROOT_BONUS,
-                          np.where(np.isin(bass_pc, tones), BASS_TONE_BONUS, 0.0))
+                          np.where(np.isin(bass_pc, tones), BASS_TONE_BONUS,
+                                   -BASS_MISS_PENALTY))
+            bb = np.where(bass_pc >= 0, bb, 0.0)
             scores[:, root * N_QUAL + qi] = s + bb * bass_conf
-    scores[:, N_IDX] = 2.0 * (N_ENERGY_FLOOR - np.clip(energy, 0, 2))
+    # N needs BOTH low energy and an unstructured (flat) chroma frame
+    structure = 1.0 / np.maximum(chroma.mean(axis=0), 1e-3)
+    scores[:, N_IDX] = (1.2 * (N_ENERGY_FLOOR - np.clip(energy, 0, 2)) / N_ENERGY_FLOOR
+                        + 1.2 * (N_STRUCTURE_FLOOR - structure) / N_STRUCTURE_FLOOR)
     logits = scores / EMIT_TEMP
     return logits - logits.max(axis=1, keepdims=True)
 
@@ -122,11 +137,23 @@ def _merge_segments(path: np.ndarray, bounds: np.ndarray,
     return segs
 
 
-def _label_segment(seg, chroma, energy, bass, note_names, viterbi_margin):
+def _label_segment(seg, chroma, energy, bass, note_names, viterbi_margin,
+                   raw=None):
     f0, f1 = seg['f0'], seg['f1']
     med = np.median(chroma[:, f0:f1], axis=1)
     m = med.max() or 1.0
     med = med / m
+    if raw is not None:
+        # sustain x magnitude on raw hop frames: pads hold the whole segment,
+        # melody notes flicker — suppresses lead bleed the median can't
+        Fr, a, b = raw
+        if b - a >= 8:
+            sus = (Fr[:, a:b] >= 0.25).mean(axis=1)
+            medn = np.median(Fr[:, a:b], axis=1)
+            feat = sus * np.sqrt(np.maximum(medn, 0.0))
+            fm = feat.max()
+            if fm > 0:
+                med = feat / fm
 
     state = seg['state']
     if state == N_IDX:
@@ -135,14 +162,8 @@ def _label_segment(seg, chroma, energy, bass, note_names, viterbi_margin):
     ivs1 = CORE_QUALITIES[state % N_QUAL][1]
     tmpl_tones = [(root1 + iv) % 12 for iv in ivs1]
 
-    pcs = {pc for pc in range(12) if med[pc] >= PC_KEEP}
-    pcs |= {pc for pc in tmpl_tones if med[pc] >= PC_KEEP_TMPL}
-    if len(pcs) > PC_CAP:
-        pcs = set(sorted(pcs, key=lambda p: -med[p])[:PC_CAP])
-    if not pcs:
-        return None
-
-    # modal bass over the segment
+    # modal bass over the segment (before pc selection — the root is often
+    # carried by the bass alone while pads voice upper structure)
     bpc = np.asarray(bass['pc'][f0:f1])
     bconf = np.asarray(bass['conf'][f0:f1])
     voiced = bpc >= 0
@@ -151,15 +172,40 @@ def _label_segment(seg, chroma, energy, bass, note_names, viterbi_margin):
         vals, counts = np.unique(bpc[voiced], return_counts=True)
         mode_pc = int(vals[np.argmax(counts)])
         frac = counts.max() / voiced.sum()
-        if frac >= BASS_STABLE_FRAC and float(bconf[voiced].mean()) > 0.5:
+        if frac >= BASS_STABLE_FRAC and float(bconf[voiced].mean()) > BASS_CONF_MIN:
             bass_pc = mode_pc
 
+    pcs = {pc for pc in range(12) if med[pc] >= PC_KEEP}
+    pcs |= {pc for pc in tmpl_tones if med[pc] >= PC_KEEP_TMPL}
+    if len(pcs) < 3:              # sparse frame (arp / single line) — dig deeper
+        pcs |= {pc for pc in tmpl_tones if med[pc] >= 0.12}
+    if len(pcs) > PC_CAP:
+        pcs = set(sorted(pcs, key=lambda p: -med[p])[:PC_CAP])
+    if not pcs:
+        return None
+
+    # the chord is named from the pad content; the bass becomes a slash.
+    # (bass pc is NOT injected into the pc set — "Abmaj7/Db", not "Dbmaj9",
+    # unless the pads themselves also voice the bass note)
     cands = detect_chords(sorted(pcs), bass_pc, note_names)
     if not cands:
-        return None
+        # fewer than 3 usable pcs — trust the Viterbi state (it had temporal
+        # context) instead of reporting a bogus no-chord
+        qname = CORE_QUALITIES[state % N_QUAL][0]
+        sfx = {'maj': '', 'min': 'm'}.get(qname, qname)
+        name = note_names[root1] + sfx
+        if bass_pc is not None and bass_pc != root1:
+            name += '/' + note_names[bass_pc]
+        return {'chord': name, 'root_pc': root1, 'sfx': sfx,
+                'bass_pc': bass_pc, 'alts': [], 'conf': 0.3}
     for c in cands:
         if c['root'] == root1:
             c['score'] += 1.0
+        # root-position reading only when the pads corroborate the bass note
+        if bass_pc is not None and c['root'] == bass_pc and med[bass_pc] >= 0.3:
+            c['score'] += STAGE2_BASS_ROOT_BONUS
+        if c['sfx'] in EXOTIC_SFX:
+            c['score'] -= EXOTIC_PENALTY
     cands.sort(key=lambda c: -c['score'])
 
     top = cands[0]
@@ -168,12 +214,21 @@ def _label_segment(seg, chroma, energy, bass, note_names, viterbi_margin):
     rival = next((c for c in cands[1:] if c['root'] != top['root']), None)
     gap = top['score'] - rival['score'] if rival else 4.0
     conf = float(1 / (1 + np.exp(-gap / 2.0))) * float(np.clip(viterbi_margin, 0.2, 1.0))
+    # alts: prefer ROOT DIVERSITY — same-root quality variants are near-
+    # duplicates; a different root is the correction the user actually needs
     alt_names = []
+    seen_roots = {top['root']}
     for c in cands[1:]:
-        if c['name'] != top['name'] and c['name'] not in alt_names:
+        if c['root'] not in seen_roots and c['name'] != top['name']:
             alt_names.append(c['name'])
+            seen_roots.add(c['root'])
+        if len(alt_names) == 3:
+            break
+    for c in cands[1:]:
         if len(alt_names) == 4:
             break
+        if c['name'] != top['name'] and c['name'] not in alt_names:
+            alt_names.append(c['name'])
     return {'chord': top['name'], 'root_pc': top['root'], 'sfx': top['sfx'],
             'bass_pc': bass_pc, 'alts': alt_names, 'conf': round(conf, 3)}
 
@@ -198,12 +253,20 @@ def recognize(chroma_data: dict, bass: dict, grid: dict, key: dict,
         other = np.delete(row, path[f]).max()
         margins[f] = 1 / (1 + np.exp(-(chosen - other)))
 
+    raw_frames = chroma_data.get('frames')
+    frame_times = chroma_data.get('frame_times')
+
     segments = []
     for seg in segs:
         t0 = float(bounds[seg['f0']])
         t1 = float(bounds[min(seg['f1'], len(bounds) - 1)])
         vm = float(margins[seg['f0']:seg['f1']].mean())
-        lab = _label_segment(seg, chroma, energy, bass, note_names, vm)
+        raw = None
+        if raw_frames is not None:
+            a = int(np.searchsorted(frame_times, t0))
+            b = int(np.searchsorted(frame_times, t1))
+            raw = (raw_frames, a, b)
+        lab = _label_segment(seg, chroma, energy, bass, note_names, vm, raw)
         if lab is None:
             segments.append({'start': round(t0, 4), 'end': round(t1, 4),
                              'chord': 'N', 'alts': [], 'conf': 1.0,

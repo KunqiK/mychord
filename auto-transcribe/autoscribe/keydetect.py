@@ -66,3 +66,46 @@ def _parse_key(text: str) -> dict:
 
 def load(key_json: Path) -> dict:
     return json.loads(key_json.read_text(encoding='utf-8'))
+
+
+MINORISH = ('m', 'm7', 'm6', 'm9', 'mMaj7', 'dim', 'dim7', 'm7b5')
+
+
+def disambiguate_relative(key: dict, segments: list[dict],
+                          out_json: Path | None = None) -> dict:
+    """KS profiles confuse relative major/minor (same pitch set). Decide from
+    the detected chords: duration on the minor tonic (minor quality) vs the
+    major tonic (major quality); the final chord votes double."""
+    if key['mode'] == 'min':
+        maj_pc = (key['tonic_pc'] + 3) % 12
+        min_pc = key['tonic_pc']
+    else:
+        maj_pc = key['tonic_pc']
+        min_pc = (key['tonic_pc'] + 9) % 12
+
+    w_maj = w_min = 0.0
+    chords = [s for s in segments if s.get('root_pc') is not None]
+    for i, s in enumerate(chords):
+        dur = s['end'] - s['start']
+        if i == len(chords) - 1:
+            dur *= 2.0
+        if s['root_pc'] == min_pc and s.get('sfx', '') in MINORISH:
+            w_min += dur
+        elif s['root_pc'] == maj_pc and s.get('sfx', '') not in MINORISH:
+            w_maj += dur
+        # a slash bass sitting on a tonic candidate is tonal evidence too
+        if s.get('bass_pc') is not None and s['bass_pc'] != s['root_pc']:
+            if s['bass_pc'] == min_pc:
+                w_min += 0.5 * dur
+            elif s['bass_pc'] == maj_pc:
+                w_maj += 0.5 * dur
+    mode = 'min' if w_min > w_maj else 'maj'
+    tonic = min_pc if mode == 'min' else maj_pc
+    if mode != key['mode'] or tonic != key['tonic_pc']:
+        root, active_key, dir_sharp, _ = key_spelling(tonic, mode)
+        key = dict(key, tonic_pc=tonic, mode=mode, root=root,
+                   active_key=active_key, dir_sharp=dir_sharp,
+                   name=f"{root} {'Minor' if mode == 'min' else 'Major'}")
+        if out_json is not None:
+            out_json.write_text(json.dumps(key), encoding='utf-8')
+    return key

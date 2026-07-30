@@ -153,15 +153,15 @@ def main(argv=None) -> int:
 
     grid = beats_mod.frame_grid(beats)
 
-    if args.chroma_vocals is not None:
-        voc_w = args.chroma_vocals
-    else:
-        voc_w = 0.3 if melody_mod.vocals_present(stems_dir / 'vocals.wav') else 0.0
+    # vocals hurt harmony chroma on tested material (pitched chops); opt-in only
+    voc_w = args.chroma_vocals if args.chroma_vocals is not None else 0.0
     chroma_npz = sc.path('chroma.npz')
-    sc.run_stage('chroma', {'voc_w': voc_w, 'beats': beat_params}, [chroma_npz],
+    sc.run_stage('chroma', {'voc_w': voc_w, 'beats': beat_params, 'v': 2},
+                 [chroma_npz],
                  lambda: chroma_mod.compute(
                      stems_dir / 'other.wav', stems_dir / 'vocals.wav',
-                     grid['bounds'], chroma_npz, vocals_weight=voc_w))
+                     grid['bounds'], chroma_npz, vocals_weight=voc_w,
+                     bass_wav=stems_dir / 'bass.wav'))
     chroma_data = chroma_mod.load(chroma_npz)
 
     bass_json = sc.path('bass.json')
@@ -189,6 +189,12 @@ def main(argv=None) -> int:
     segments = chords_mod.load(chords_json)['segments']
     n_chords = len([s for s in segments if s['chord'] != 'N'])
     print(f'    {n_chords} chord segments')
+
+    if not args.key:   # user override wins; otherwise settle relative maj/min
+        new_key = keydetect.disambiguate_relative(key, segments, key_json)
+        if new_key['name'] != key['name']:
+            print(f"    key revised by chord evidence: {key['name']} → {new_key['name']}")
+            key = new_key
 
     melody = None
     if not args.no_melody and args.melody_source != 'none':
