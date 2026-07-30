@@ -23,3 +23,10 @@ A workspace for projects built and refined with Claude Code.
 A browser-based chord/progression HUD designed for video overlay (1920×1080, black background, Screen blending mode). Latest version: **`chord_hud_v17.4.html`**.
 
 Full documentation — version history (v4 → v12), features, and key-function reference — lives in **[ChordHUD.md](ChordHUD.md)**. Record all ChordHUD changes there, not here.
+
+### auto-transcribe (added 2026-07-30)
+Local CPU transcription pipeline feeding ChordHUD: song audio → demucs stems → chords
+(Viterbi + exact port of ChordHUD's 22-template detector) + melody (basic-pitch ONNX) →
+ready-to-load `.chordhud.json` project + `melody.mid` + ear-check `preview.wav` + worst-first
+review list. Docs: **[auto-transcribe/README.md](auto-transcribe/README.md)** (includes the
+critical env note: PATH `python` is MinGW — always use `transcribe.cmd`).
