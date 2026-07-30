@@ -89,9 +89,18 @@ autoscribe\
   cli.py cache.py audio_io.py
 ```
 
+## 评测(有标准答案 MIDI 时)
+
+```
+.venv\Scripts\python.exe evaluate_gt.py --midi GT.mid --cache cache\<slug> [--details]
+```
+自动用 bass 声部吻合度对齐音频↔MIDI 偏移;输出 root/质性/全名/**和声兼容**(我们的和弦音 ⊆ 实际在响的和声 = 合法读法)/root-in-alts 五级指标 + 旋律音符级 P/R。基准 (Camellia S.A.T.E.L.L.I.T.E., 人工全曲扒谱 MIDI): root 34.8%, 和声兼容 71.3%, BPM 149.995/150。
+
 ## 已知边界
 
 - 和弦精度预期:嘈杂电子乐分离后三和弦级约 70-85%,七和弦/挂留质性更低 — 所以有备选 chip 和低置信度清单,**修正才是设计核心**
+- **无根音配置 (jazz 式 pad) 的根音本质上是记法约定**:pad 只弹上层结构时 (如 Ab C Eb G / 低音 Db),Abmaj7/Db 与 Dbmaj9 都是合法读法 — 管线按"pad 定和弦名 + 斜杠标低音"约定输出;和声兼容率才是真实听感指标
+- **密集电子混音里的合成器 lead 旋律提取很弱** (skyline 在 arp/pad/lead 堆叠的 other 轨上 F1≈0.1) — 人声旋律可用 (vocals 轨 recall ~50%),纯器乐主旋律目前仍需人工;这是下一个值得攻关的点
 - drop/纯打击段落输出 N(无和弦),不入时间轴
 - 四踩强拍相位有本质歧义 — 一定用 `--click` 听一遍
 - 拍号默认 4/4(`--beats-per-bar` 可改),变拍歌曲当前只支持单一拍号(ChordHUD 的 meterMap 支持变拍,管线暂未利用)
