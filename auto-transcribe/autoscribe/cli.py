@@ -27,10 +27,20 @@ def build_parser() -> argparse.ArgumentParser:
                    choices=['auto', 'vocals', 'other', 'none'])
     p.add_argument('--lead-floor', default='C4',
                    help='skyline floor pitch for instrumental lead (default C4)')
+    p.add_argument('--vocal-gate', type=float, default=0.25,
+                   help='drop vocal-melody notes outside sections where the '
+                        'vocals stem carries this share of mix energy '
+                        '(0 = off; default 0.25)')
     p.add_argument('--chroma-vocals', type=float, default=None,
                    help='mix vocals into harmony chroma at this weight (default: auto)')
     p.add_argument('--model', default='htdemucs',
                    choices=['htdemucs', 'htdemucs_ft'])
+    p.add_argument('--piano', action='store_true',
+                   help='also run the ByteDance piano engine (velocity+pedal) '
+                        '→ piano.mid; best on piano-led material')
+    p.add_argument('--piano-stem', default='input', choices=['input', 'other'],
+                   help='piano engine input: the full mix (default, for piano '
+                        'recordings) or the separated other stem')
     p.add_argument('--lines-scale-snap', action='store_true',
                    help='drop out-of-key notes from lines.mid poly/lead tracks '
                         '(NeuralNote-style scale filter; off by default — '
@@ -186,7 +196,7 @@ def main(argv=None) -> int:
     _, _, _, note_names = key_spelling(key['tonic_pc'], key['mode'])
 
     chords_json = sc.path('chords.json')
-    sc.run_stage('chords', {'key': key['active_key'], 'voc_w': voc_w},
+    sc.run_stage('chords', {'key': key['active_key'], 'voc_w': voc_w, 'v': 2},
                  [chords_json],
                  lambda: chords_mod.recognize(chroma_data, bass, grid, key,
                                               note_names, chords_json))
@@ -206,15 +216,29 @@ def main(argv=None) -> int:
         floor_midi = int(librosa.note_to_midi(args.lead_floor))
         melody_json = sc.path('melody.json')
         sc.run_stage('melody',
-                     {'source': args.melody_source, 'floor': floor_midi, 'v': 2},
+                     {'source': args.melody_source, 'floor': floor_midi,
+                      'gate': args.vocal_gate, 'v': 3},
                      [melody_json],
                      lambda: melody_mod.extract(stems_dir, melody_json,
                                                 source=args.melody_source,
-                                                lead_floor_midi=floor_midi))
+                                                lead_floor_midi=floor_midi,
+                                                vocal_gate=args.vocal_gate))
         melody = melody_mod.load(melody_json)
         print(f"    melody: {melody['source']}/{melody['engine']} "
               f"{len(melody['notes'])} notes"
               + (f" + poly {len(melody.get('poly', []))}" if melody.get('poly') else ''))
+
+    piano_data = None
+    if args.piano:
+        from . import piano as piano_mod
+        piano_json = sc.path('piano.json')
+        piano_src = input_wav if args.piano_stem == 'input' \
+            else stems_dir / 'other.wav'
+        sc.run_stage('piano', {'stem': args.piano_stem, 'v': 1}, [piano_json],
+                     lambda: piano_mod.transcribe(piano_src, piano_json))
+        piano_data = piano_mod.load(piano_json)
+        print(f"    piano: {len(piano_data['notes'])} notes, "
+              f"{piano_data['n_pedal']} pedal events")
 
     # ── outputs (always regenerated) ──
     print('  [outputs]')
@@ -228,6 +252,18 @@ def main(argv=None) -> int:
                               out_dir / 'melody.mid', quantize=True)
         midi_out.write_melody(melody['notes'], mapper, beats['bpm'],
                               out_dir / 'melody_raw.mid', quantize=False)
+    if piano_data and piano_data['notes']:
+        from .melodfy_vendor.utilities import write_events_to_midi
+        write_events_to_midi(
+            0,
+            [{'midi_note': n['midi'], 'onset_time': n['start'],
+              'offset_time': n['end'],
+              'velocity': int(round(n['amp'] * 127))}
+             for n in piano_data['notes']],
+            [{'onset_time': p['start'], 'offset_time': p['end']}
+             for p in piano_data.get('pedal', [])],
+            str(out_dir / 'piano.mid'))
+
     if melody and (melody.get('poly') or melody.get('lead_line')):
         def scale_snap(notes):
             if not args.lines_scale_snap:
@@ -243,6 +279,8 @@ def main(argv=None) -> int:
             tracks.append(('Lead candidate (skyline)', scale_snap(melody['lead_line'])))
         if melody.get('poly'):
             tracks.append(('Other stem (full poly draft)', scale_snap(melody['poly'])))
+        if piano_data and piano_data['notes']:
+            tracks.append(('Piano (ByteDance, quantized)', piano_data['notes']))
         midi_out.write_lines(tracks, mapper, beats['bpm'],
                              out_dir / 'lines.mid', quantize=True)
     synthesize.write_preview(

@@ -36,12 +36,14 @@ BASS_ROOT_BONUS = 2.0               # x bass conf, when bass pc == root
 BASS_TONE_BONUS = 0.6               # x bass conf, when bass pc is another chord tone
 BASS_MISS_PENALTY = 0.6             # x bass conf, when bass pc is NOT a chord tone
 EMIT_TEMP = 0.35                    # divide scores by this → log-emission scale
-CHANGE_COST = 6.0                   # base log-cost of switching chords
+CHANGE_COST = 3.5                   # base log-cost of switching chords
+# (tuned on the SATELLITE reference: real harmonic rhythm is ~2 beats/chord;
+#  higher costs smear multiple changes into one long wrong segment)
 CHANGE_MULT = {'downbeat': 0.4, 'midbar': 0.7, 'beat': 1.0, 'offbeat': 1.6}
 ENERGY_DAMP_FLOOR = 0.25            # quiet-but-structured frames keep >=sqrt(.25) weight
 N_ENERGY_FLOOR = 0.15               # N needs BOTH low energy (x median) ...
 N_STRUCTURE_FLOOR = 2.0             # ... and flat chroma (1/mean of max-normed chroma)
-MIN_SEG_BEATS = 2.0                 # absorb shorter segments into neighbors
+MIN_SEG_BEATS = 1.0                 # absorb shorter segments into neighbors
 PC_KEEP = 0.4                       # stage-2: keep pcs with chroma >= this
 PC_KEEP_TMPL = 0.25                 # ...or template tones above this
 PC_CAP = 6

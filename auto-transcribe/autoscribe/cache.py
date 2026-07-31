@@ -22,6 +22,7 @@ DOWNSTREAM = {
     'key':      ['chords'],
     'chords':   [],
     'melody':   [],
+    'piano':    [],
 }
 STAGES = list(DOWNSTREAM.keys())
 

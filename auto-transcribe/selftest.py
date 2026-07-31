@@ -87,7 +87,8 @@ def synth_stems():
         fade = int(0.01 * SR)
         note[:fade] *= np.linspace(0, 1, fade)
         note[-fade:] *= np.linspace(1, 0, fade)
-        vocals[i0:i0 + len(note)] += 0.3 * note
+        # loud enough to survive the vocal section gate (real vocal share)
+        vocals[i0:i0 + len(note)] += 0.6 * note
 
     rng = np.random.default_rng(42)
     other += 10 ** (-30 / 20) * rng.standard_normal(n)

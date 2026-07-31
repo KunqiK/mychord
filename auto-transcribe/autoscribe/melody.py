@@ -145,8 +145,39 @@ def _pyin_notes(stem_wav: Path) -> list[dict]:
     return [n for n in notes if n['end'] - n['start'] >= MIN_NOTE_S]
 
 
+VOCAL_RANGE = (45, 83)   # sung melody register (A2..B5); outside = ghost/harmonic
+
+
+def _vocal_section_gate(notes, vocals_wav: Path, mix_wav: Path,
+                        thresh: float) -> list[dict]:
+    """Keep notes only inside sections where the vocals stem carries a
+    sustained share of the mix energy (3 s smoothed). Kills the pitched
+    synth bleed / vocal-chop ghosts that litter instrumental sections."""
+    import librosa
+    import scipy.ndimage
+    yv, sr = load_mono(vocals_wav)
+    ym, _ = load_mono(mix_wav)
+    n = min(len(yv), len(ym))
+    rv = librosa.feature.rms(y=yv[:n], frame_length=2048, hop_length=512)[0]
+    rm = librosa.feature.rms(y=ym[:n], frame_length=2048, hop_length=512)[0]
+    ratio = rv / (rm + 1e-8)
+    fps = sr / 512
+    smooth = scipy.ndimage.median_filter(ratio, size=max(int(3.0 * fps), 1))
+    times = librosa.times_like(rv, sr=sr, hop_length=512)
+    # adaptive: in material where the vocal share is globally modest, scale
+    # the threshold down instead of gating everything away
+    eff = min(thresh, 0.6 * float(np.percentile(smooth, 90)))
+    kept = []
+    for o in notes:
+        a = int(np.searchsorted(times, o['start']))
+        b = max(int(np.searchsorted(times, o['end'])), a + 1)
+        if float(np.median(smooth[a:b])) >= eff:
+            kept.append(o)
+    return kept
+
+
 def extract(stems_dir: Path, out_json: Path, source: str = 'auto',
-            lead_floor_midi: int = 60) -> dict:
+            lead_floor_midi: int = 60, vocal_gate: float = 0.25) -> dict:
     vocals = stems_dir / 'vocals.wav'
     other = stems_dir / 'other.wav'
     if source == 'auto':
@@ -164,6 +195,12 @@ def extract(stems_dir: Path, out_json: Path, source: str = 'auto',
         raw = _predict_notes(stem)
         notes = _monophonic_by_amp(raw) if source == 'vocals' \
             else _skyline(raw, lead_floor_midi)
+        if source == 'vocals':
+            notes = [n for n in notes
+                     if VOCAL_RANGE[0] <= n['midi'] <= VOCAL_RANGE[1]]
+            mix_wav = stems_dir.parent / 'input.wav'
+            if vocal_gate > 0 and mix_wav.exists():
+                notes = _vocal_section_gate(notes, vocals, mix_wav, vocal_gate)
         # full polyphonic draft of the instrumental stem, sensitive settings:
         # catches lead/arp/piano lines the monophonic reduction can't —
         # over-detects on purpose, meant for DAW piano-roll cleanup
