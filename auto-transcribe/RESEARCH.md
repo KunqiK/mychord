@@ -33,12 +33,29 @@ NeuralNote 不替代管线,做**难段补扒**:把 `cache\<歌>\stems\vocals.wav
 - 参数实测 (SATELLITE, 对照人工 GT):默认阈值 → other 轨只回收 25% Lead;**敏感 (onset 0.3/frame 0.2/minlen 60ms) → Lead 57% / Arp 81% / Piano 68%**,代价 1 万音符过检
 - 过检修剪实验:amp>0.3 砍一半音符但 Lead 覆盖 61%→43% —— **Lead 音符天生低置信度(被 supersaw 掩蔽),不能一刀切**。方案:力度=置信度写进 MIDI,DAW 里拉力度过滤线 = 任意阈值交互调
 
+## 合成器 Lead 自动提取 — 五路实验全部证伪 (2026-07-30, GT=SATELLITE Lead 轨)
+
+用户问"为什么扒不出 lead"。系统性实验,帧级 pitch-class 正确率(GT Lead 活跃帧):
+
+| 方法 | 结果 | 死因 |
+|---|---|---|
+| skyline(事件最高音) | ~22% 音符覆盖 | 抓到的是 arp/FX 最高音 |
+| basic-pitch note PG + Viterbi 追踪 | 23% | **GT 音高在后验图中位排名第 8, top1 仅 11%** — 模型看不见被 supersaw 墙埋住的 lead |
+| CQT 八度梳 salience + Viterbi | **31.5%(最好)** | 表示层 top3 只 43% = oracle 天花板 |
+| 平稳性抑制(减时间中值) | 21% | lead 长音也被当 pad 减掉 |
+| vocals 轨 / 全混音的 PG | 排名 36 / 18 | lead 不在 vocals;全混音更糟 |
+
+**结论:瓶颈在表示层不在算法** —— lead 埋在强相关的 supersaw 堆里,需要专门训练的分离模型。已搜证:公开社区(UVR/MSST/MVSEP)现有模型全是人声方向(karaoke/lead vocal),**没有器乐 lead 分离模型**。
+
+**可用的半自动路径(已验证数字)**:lines.mid 复音草稿覆盖 **Lead 61% / Arp 81%**(敏感阈值,力度=置信度)→ DAW 里力度过滤 + loop 对听删修。Arp 尤其可行:模式重复,修对一遍 pattern 即可复制。
+
 ## 路线图(按价值排序)
 
-1. **contour 矩阵多声线分离**(basic-pitch model_output)—— 从源头解决"lead/arp 都要"
+1. **⏳ 跟踪社区 lead/melody 分离模型**(roformer 生态在活跃出新 stem 模型;一旦出现即接入 — MSST 基础设施已装)
 2. **`--engine piano`**(ByteDance 模型)—— 钢琴素材专线,带力度踏板
 3. NeuralNote 式部分量化 `--quantize-strength`(需要"人味"时)
 4. 变拍支持(ChordHUD meterMap 已支持,管线未利用)
+5. ~~contour 矩阵多声线分离~~ — 已证伪(表示层瓶颈,见上表)
 
 ## 基准记录 (Camellia S.A.T.E.L.L.I.T.E., 人工 GT, offset +2.04s)
 
