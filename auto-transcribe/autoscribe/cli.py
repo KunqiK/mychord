@@ -31,6 +31,10 @@ def build_parser() -> argparse.ArgumentParser:
                    help='mix vocals into harmony chroma at this weight (default: auto)')
     p.add_argument('--model', default='htdemucs',
                    choices=['htdemucs', 'htdemucs_ft'])
+    p.add_argument('--lines-scale-snap', action='store_true',
+                   help='drop out-of-key notes from lines.mid poly/lead tracks '
+                        '(NeuralNote-style scale filter; off by default — '
+                        'chromatic passages are real music)')
     p.add_argument('--click', action='store_true',
                    help='add beat clicks to preview.wav (downbeat = high pitch)')
     p.add_argument('--preview-melody', action='store_true',
@@ -225,13 +229,20 @@ def main(argv=None) -> int:
         midi_out.write_melody(melody['notes'], mapper, beats['bpm'],
                               out_dir / 'melody_raw.mid', quantize=False)
     if melody and (melody.get('poly') or melody.get('lead_line')):
+        def scale_snap(notes):
+            if not args.lines_scale_snap:
+                return notes
+            steps = (0, 2, 3, 5, 7, 8, 10) if key['mode'] == 'min' \
+                else (0, 2, 4, 5, 7, 9, 11)
+            scale = {(key['tonic_pc'] + iv) % 12 for iv in steps}
+            return [n for n in notes if n['midi'] % 12 in scale]
         tracks = []
         if melody['notes']:
             tracks.append((f"Primary ({melody['source']})", melody['notes']))
         if melody.get('lead_line'):
-            tracks.append(('Lead candidate (skyline)', melody['lead_line']))
+            tracks.append(('Lead candidate (skyline)', scale_snap(melody['lead_line'])))
         if melody.get('poly'):
-            tracks.append(('Other stem (full poly draft)', melody['poly']))
+            tracks.append(('Other stem (full poly draft)', scale_snap(melody['poly'])))
         midi_out.write_lines(tracks, mapper, beats['bpm'],
                              out_dir / 'lines.mid', quantize=True)
     synthesize.write_preview(

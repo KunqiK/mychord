@@ -32,11 +32,13 @@ class BeatMapper:
         return int(round(self.beats_at(t) * TPB))
 
     def quantize_note(self, start: float, end: float) -> tuple[int, int] | None:
-        """Hard-snap to the 16th grid — music is written ON the grid; keeping
-        'played' positions just reads as sloppy timing in a DAW."""
+        """Hard-snap to the nearest grid point among straight 16ths AND 8th
+        triplets (NeuralNote-style time divisions) — triplet phrases survive
+        instead of being smeared onto the straight grid."""
         b0 = self.beats_at(start)
         b1 = self.beats_at(end)
-        sub = 1.0 / SUBDIV
+        subs = (1.0 / SUBDIV, 1.0 / 3.0)
+        sub = min(subs, key=lambda s: abs(b0 - round(b0 / s) * s))
         q0 = round(b0 / sub) * sub
         q1 = max(round(b1 / sub) * sub, q0 + sub)
         return int(round(q0 * TPB)), int(round(q1 * TPB))
