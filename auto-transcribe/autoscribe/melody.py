@@ -37,13 +37,15 @@ def basic_pitch_available() -> bool:
         return False
 
 
-def _predict_notes(stem_wav: Path) -> list[dict]:
+def _predict_notes(stem_wav: Path, onset: float = 0.5, frame: float = 0.3,
+                   minlen: float = 90.0, fmin: float = 80.0,
+                   fmax: float = 1000.0) -> list[dict]:
     from basic_pitch.inference import predict
     _model_out, _midi, note_events = predict(
         str(stem_wav),
-        onset_threshold=0.5, frame_threshold=0.3,
-        minimum_note_length=90.0,
-        minimum_frequency=80.0, maximum_frequency=1000.0,
+        onset_threshold=onset, frame_threshold=frame,
+        minimum_note_length=minlen,
+        minimum_frequency=fmin, maximum_frequency=fmax,
     )
     notes = [{'start': float(s), 'end': float(e), 'midi': int(p),
               'amp': float(a)} for (s, e, p, a, _bends) in note_events]
@@ -155,22 +157,33 @@ def extract(stems_dir: Path, out_json: Path, source: str = 'auto',
         return result
 
     stem = vocals if source == 'vocals' else other
+    poly = []
+    lead_line = []
     if basic_pitch_available():
         engine = 'basic-pitch'
         raw = _predict_notes(stem)
         notes = _monophonic_by_amp(raw) if source == 'vocals' \
             else _skyline(raw, lead_floor_midi)
+        # full polyphonic draft of the instrumental stem, sensitive settings:
+        # catches lead/arp/piano lines the monophonic reduction can't —
+        # over-detects on purpose, meant for DAW piano-roll cleanup
+        if other.exists():
+            poly = _predict_notes(other, onset=0.3, frame=0.2, minlen=60.0,
+                                  fmin=60.0, fmax=2500.0)
+            lead_line = _skyline(poly, lead_floor_midi)
     else:
         engine = 'pyin'
         notes = _pyin_notes(stem)
         if source == 'other':
             notes = [n for n in notes if n['midi'] >= lead_floor_midi]
 
-    result = {'source': source, 'engine': engine,
-              'notes': [{'start': round(n['start'], 4),
-                         'end': round(n['end'], 4),
-                         'midi': n['midi'],
-                         'amp': round(n.get('amp', 0.7), 3)} for n in notes]}
+    def pack(ns):
+        return [{'start': round(n['start'], 4), 'end': round(n['end'], 4),
+                 'midi': n['midi'], 'amp': round(n.get('amp', 0.7), 3)}
+                for n in ns]
+
+    result = {'source': source, 'engine': engine, 'notes': pack(notes),
+              'poly': pack(poly), 'lead_line': pack(lead_line)}
     out_json.write_text(json.dumps(result), encoding='utf-8')
     return result
 

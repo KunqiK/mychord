@@ -18,6 +18,9 @@ from pathlib import Path
 
 import numpy as np
 
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from autoscribe.audio_io import load_mono          # noqa: E402
 from autoscribe.hud_port import detect_chords      # noqa: E402
@@ -266,6 +269,22 @@ def main():
             if t - last > 1.0:
                 print(f'  {int(t) // 60}:{t % 60:05.2f}  GT={g:12s} ours={o}')
             last = t
+
+    # ── multi-line coverage: skyline lead + full poly draft vs GT ──
+    if melody and mel:
+        def cover(ours_notes, tol=0.12):
+            hit = 0
+            for g in mel:
+                if any(abs(o['start'] - offset - g['start']) <= tol
+                       and o['midi'] % 12 == g['midi'] % 12 for o in ours_notes):
+                    hit += 1
+            return hit / len(mel)
+        if melody.get('lead_line'):
+            print(f"\nlead_line (skyline) covers {cover(melody['lead_line']):.1%} "
+                  f"of GT {args.melody} notes (n={len(melody['lead_line'])})")
+        if melody.get('poly'):
+            print(f"poly draft covers {cover(melody['poly']):.1%} "
+                  f"of GT {args.melody} notes (n={len(melody['poly'])}, over-detects by design)")
 
     # ── melody note-level P/R (onset ±0.1 s) ──
     if melody and melody.get('notes') and mel:

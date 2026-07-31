@@ -32,14 +32,12 @@ class BeatMapper:
         return int(round(self.beats_at(t) * TPB))
 
     def quantize_note(self, start: float, end: float) -> tuple[int, int] | None:
+        """Hard-snap to the 16th grid — music is written ON the grid; keeping
+        'played' positions just reads as sloppy timing in a DAW."""
         b0 = self.beats_at(start)
         b1 = self.beats_at(end)
         sub = 1.0 / SUBDIV
         q0 = round(b0 / sub) * sub
-        step = self.bt[1] - self.bt[0] if len(self.bt) > 1 else 0.5
-        tol_beats = min(SNAP_MAX_S / step, 0.3 * sub)
-        if abs(b0 - q0) > tol_beats:
-            q0 = b0  # too far from grid — keep the played position
         q1 = max(round(b1 / sub) * sub, q0 + sub)
         return int(round(q0 * TPB)), int(round(q1 * TPB))
 
@@ -91,6 +89,35 @@ def write_melody(notes: list[dict], mapper: BeatMapper, bpm: float,
         events.append((max(on, 0), max(off, 1), int(n['midi']), vel))
     events.sort(key=lambda e: e[0])
     _write_notes(track, events)
+    mid.save(str(out_path))
+
+
+def write_lines(line_tracks: list[tuple[str, list[dict]]], mapper: BeatMapper,
+                bpm: float, out_path: Path, quantize: bool = True,
+                key_name: str | None = None):
+    """Multi-track MIDI: one track per melodic line (vocal / lead / poly…)."""
+    mid = mido.MidiFile(ticks_per_beat=TPB, type=1)
+    meta = mido.MidiTrack()
+    mid.tracks.append(meta)
+    meta.append(mido.MetaMessage('set_tempo', tempo=mido.bpm2tempo(bpm), time=0))
+    meta.append(mido.MetaMessage('time_signature', numerator=4, denominator=4, time=0))
+    meta.append(mido.MetaMessage('end_of_track', time=0))
+    for name, notes in line_tracks:
+        track = mido.MidiTrack()
+        mid.tracks.append(track)
+        track.append(mido.MetaMessage('track_name', name=name, time=0))
+        events = []
+        for n in notes:
+            if quantize:
+                on, off = mapper.quantize_note(n['start'], n['end'])
+            else:
+                on, off = mapper.ticks_at(n['start']), mapper.ticks_at(n['end'])
+            if off <= on:
+                off = on + TPB // SUBDIV
+            vel = int(np.clip(40 + n.get('amp', 0.7) * 70, 1, 127))
+            events.append((max(on, 0), max(off, 1), int(n['midi']), vel))
+        events.sort(key=lambda e: e[0])
+        _write_notes(track, events)
     mid.save(str(out_path))
 
 

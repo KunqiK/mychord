@@ -202,14 +202,15 @@ def main(argv=None) -> int:
         floor_midi = int(librosa.note_to_midi(args.lead_floor))
         melody_json = sc.path('melody.json')
         sc.run_stage('melody',
-                     {'source': args.melody_source, 'floor': floor_midi},
+                     {'source': args.melody_source, 'floor': floor_midi, 'v': 2},
                      [melody_json],
                      lambda: melody_mod.extract(stems_dir, melody_json,
                                                 source=args.melody_source,
                                                 lead_floor_midi=floor_midi))
         melody = melody_mod.load(melody_json)
         print(f"    melody: {melody['source']}/{melody['engine']} "
-              f"{len(melody['notes'])} notes")
+              f"{len(melody['notes'])} notes"
+              + (f" + poly {len(melody.get('poly', []))}" if melody.get('poly') else ''))
 
     # ── outputs (always regenerated) ──
     print('  [outputs]')
@@ -223,6 +224,16 @@ def main(argv=None) -> int:
                               out_dir / 'melody.mid', quantize=True)
         midi_out.write_melody(melody['notes'], mapper, beats['bpm'],
                               out_dir / 'melody_raw.mid', quantize=False)
+    if melody and (melody.get('poly') or melody.get('lead_line')):
+        tracks = []
+        if melody['notes']:
+            tracks.append((f"Primary ({melody['source']})", melody['notes']))
+        if melody.get('lead_line'):
+            tracks.append(('Lead candidate (skyline)', melody['lead_line']))
+        if melody.get('poly'):
+            tracks.append(('Other stem (full poly draft)', melody['poly']))
+        midi_out.write_lines(tracks, mapper, beats['bpm'],
+                             out_dir / 'lines.mid', quantize=True)
     synthesize.write_preview(
         input_wav, segments, beats, out_dir / 'preview.wav', click=args.click,
         melody_notes=(melody['notes'] if (melody and args.preview_melody) else None))
