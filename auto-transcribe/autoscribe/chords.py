@@ -133,6 +133,119 @@ SFX_TO_VOCA = {
     'maj9': 8, 'm9': 6, '9': 9, '7b9': 9, '7#9': 9, '7sus4': 13,
     'augMaj7': 3, 'add9': 1,
 }
+# ── NNLS harmonic-template verification (Mauch ISMIR 2010) ──
+# "Play the candidate and listen for clashes", automated: restricted NNLS fit
+# of the segment spectrum by the candidate's tones (+harmonics). A masked
+# root's harmonics still pull the fit — the second ceiling-free evidence.
+NNLS_W = 0.0                        # OFF: both raw and log-compressed variants
+                                    # measured NEUTRAL on the 34-song set
+                                    # (38.8 vs 39.0 mean root) — the restricted
+                                    # fit needs Mauch's full front-end (tuning
+                                    # correction, background subtraction) to
+                                    # pay off; kept as an experiment knob
+NNLS_TOP_K = 8                      # only fit the strongest candidates (CPU)
+NNLS_MIN_SPAN = 1e-3                # residual spread below this = no signal
+# ── progression-pattern prior (Chordonomicon 679k songs / 50M bigrams) ──
+# The human transcriber's "it's probably the vi here" — a segment-level
+# second Viterbi over each segment's top-K candidates, with edges scored by
+# transposition-invariant bigram stats (models\progressions.npz; absent file
+# = pass disabled). Same-chord continuation is neutral (repeats were
+# collapsed when the table was built, so the table can't judge them).
+PROG_W = 0.0                        # OFF: measured neutral-to-negative here
+                                    # (W=1.2 → −0.5pp root, W=0.5 → −0.3pp;
+                                    #  this catalog loves non-cliché moves and
+                                    #  the UG-derived prior drags true reads
+                                    #  toward clichés). Machinery kept — the
+                                    #  lattice is the container for future
+                                    #  edge/node scorers.
+PROG_TOP_K = 5                      # candidates per segment in the lattice
+PROG_CLAMP = (-3.0, 3.5)            # per-edge bounds on (logp - uniform)
+PROG_QUAL = ['maj', 'min', '7', 'maj7', 'm7', 'sus4', 'dim', 'm7b5']
+SFX_TO_CORE = {
+    '': 'maj', 'add9': 'maj', '6': 'maj', 'aug': 'maj',
+    'm': 'min', 'm6': 'min',
+    '7': '7', '9': '7', '7b9': '7', '7#9': '7', '7sus4': '7',
+    'maj7': 'maj7', 'maj9': 'maj7', 'augMaj7': 'maj7',
+    'm7': 'm7', 'm9': 'm7', 'mMaj7': 'm7',
+    'sus4': 'sus4', 'sus2': 'sus4',
+    'dim': 'dim', 'dim7': 'dim',
+    'm7b5': 'm7b5',
+}
+
+_PROG_TABLE = None
+
+
+def _load_progressions():
+    global _PROG_TABLE
+    if _PROG_TABLE is None:
+        p = Path(__file__).resolve().parents[1] / 'models' / 'progressions.npz'
+        _PROG_TABLE = np.load(p)['logp'] if p.exists() else False
+    return None if _PROG_TABLE is False else _PROG_TABLE
+
+
+def _lattice_rescore(segments, logp):
+    """Second Viterbi over per-segment candidate lists; edges = progression
+    prior, nodes = the full evidence score already computed per candidate."""
+    uni = float(np.log(1.0 / (12 * len(PROG_QUAL))))
+    opts = []                       # per segment: list of cand dicts or [None]
+    for s in segments:
+        cs = s.get('cands') or []
+        if s['chord'] == 'N' or not cs:
+            opts.append([None])
+        else:
+            opts.append(cs[:PROG_TOP_K])
+
+    def node(c, best):
+        return 0.0 if c is None else float(c['score']) - best
+
+    def edge(c1, c2):
+        if c1 is None or c2 is None:
+            return 0.0
+        q1 = SFX_TO_CORE.get(c1['sfx'])
+        q2 = SFX_TO_CORE.get(c2['sfx'])
+        if q1 is None or q2 is None:
+            return 0.0
+        dr = (c2['root'] - c1['root']) % 12
+        if dr == 0 and q1 == q2:
+            return 0.0              # continuation — the table can't judge it
+        raw = float(logp[PROG_QUAL.index(q1), dr, PROG_QUAL.index(q2)]) - uni
+        return PROG_W * float(np.clip(raw, *PROG_CLAMP))
+
+    n = len(segments)
+    best_sc = [max((float(c['score']) for c in o if c is not None),
+                   default=0.0) for o in opts]
+    dp = [[node(c, best_sc[0]) for c in opts[0]]]
+    bk = [[0] * len(opts[0])]
+    for i in range(1, n):
+        row, back = [], []
+        for j, c in enumerate(opts[i]):
+            cands_prev = [dp[i - 1][k] + edge(opts[i - 1][k], c)
+                          for k in range(len(opts[i - 1]))]
+            k = int(np.argmax(cands_prev))
+            row.append(cands_prev[k] + node(c, best_sc[i]))
+            back.append(k)
+        dp.append(row)
+        bk.append(back)
+    j = int(np.argmax(dp[-1]))
+    picks = [0] * n
+    for i in range(n - 1, -1, -1):
+        picks[i] = j
+        j = bk[i][j]
+
+    changed = 0
+    for s, o, j in zip(segments, opts, picks):
+        c = o[j]
+        if c is None or c['name'] == s['chord']:
+            continue
+        old = s['chord']
+        s['chord'] = c['name']
+        s['root_pc'] = c['root']
+        s['sfx'] = c['sfx']
+        alts = [old] + [a for a in s.get('alts', []) if a != c['name']]
+        s['alts'] = alts[:4]
+        s['conf'] = round(min(s.get('conf', 0.5), 0.6), 3)
+        changed += 1
+    return changed
 MIN_PIECE_BEATS = 1.5               # do not create pieces shorter than this
 
 
@@ -251,7 +364,8 @@ def _merge_segments(path: np.ndarray, bounds: np.ndarray,
 
 
 def _label_segment(seg, chroma, energy, bass, note_names, viterbi_margin,
-                   raw=None, ev_sources=None, seg_t=None, btc_p=None):
+                   raw=None, ev_sources=None, seg_t=None, btc_p=None,
+                   nnls_med=None):
     f0, f1 = seg['f0'], seg['f1']
     med = np.median(chroma[:, f0:f1], axis=1)
     m = med.max() or 1.0
@@ -344,7 +458,8 @@ def _label_segment(seg, chroma, energy, bass, note_names, viterbi_margin,
         if bass_pc is not None and bass_pc != root1:
             name += '/' + note_names[bass_pc]
         return {'chord': name, 'root_pc': root1, 'sfx': sfx,
-                'bass_pc': bass_pc, 'alts': [], 'conf': 0.3, 'ev': ev_used}
+                'bass_pc': bass_pc, 'alts': [], 'conf': 0.3, 'ev': ev_used,
+                'cands': []}
     btc_root = btc_qmax = None
     if btc_p is not None:
         chord_p = btc_p[:168].reshape(12, 14)
@@ -376,6 +491,20 @@ def _label_segment(seg, chroma, energy, bass, note_names, viterbi_margin,
                     float(btc_p[c['root'] * 14 + vq]) / btc_qmax
     cands.sort(key=lambda c: -c['score'])
 
+    if nnls_med is not None and len(cands) > 1:
+        from . import nnls_verify
+        top_c = cands[:NNLS_TOP_K]
+        tone_sets = [{(c['root'] + iv) % 12
+                      for iv in _TMPL_BY_SFX.get(c['sfx'], (0, 4, 7))}
+                     for c in top_c]
+        res = nnls_verify.fit_residuals(nnls_med, tone_sets, bass_pc)
+        if res is not None:
+            lo, hi = min(res), max(res)
+            if hi - lo >= NNLS_MIN_SPAN:
+                for c, r in zip(top_c, res):
+                    c['score'] += NNLS_W * (hi - r) / (hi - lo)
+                cands.sort(key=lambda c: -c['score'])
+
     top = cands[0]
     # confidence keyed to the best DIFFERENT-root rival: a wrong root is the
     # costly error; same-root quality variants are one click away in alts
@@ -399,14 +528,18 @@ def _label_segment(seg, chroma, energy, bass, note_names, viterbi_margin,
             alt_names.append(c['name'])
     return {'chord': top['name'], 'root_pc': top['root'], 'sfx': top['sfx'],
             'bass_pc': bass_pc, 'alts': alt_names, 'conf': round(conf, 3),
-            'ev': ev_used}
+            'ev': ev_used,
+            'cands': [{'name': c['name'], 'root': c['root'], 'sfx': c['sfx'],
+                       'score': round(float(c['score']), 3)}
+                      for c in cands[:PROG_TOP_K]]}
 
 
 def recognize(chroma_data: dict, bass: dict, grid: dict, key: dict,
               note_names: list[str], out_json: Path,
               piano_notes: list | None = None,
               synth_notes: list | None = None,
-              btc: dict | None = None) -> dict:
+              btc: dict | None = None,
+              nnls_wavs: tuple | None = None) -> dict:
     chroma = chroma_data['chroma']
     energy = chroma_data['energy']
     bounds = grid['bounds']
@@ -461,6 +594,14 @@ def recognize(chroma_data: dict, bass: dict, grid: dict, key: dict,
     raw_frames = chroma_data.get('frames')
     frame_times = chroma_data.get('frame_times')
 
+    nnls_spec = nnls_times = None
+    if nnls_wavs is not None and NNLS_W > 0:
+        from . import nnls_verify
+        try:
+            nnls_spec, nnls_times = nnls_verify.compute_spec(*nnls_wavs)
+        except Exception:                                     # noqa: BLE001
+            nnls_spec = None          # verification is additive — never fatal
+
     btc_times = btc_probs = None
     if btc is not None:
         # blend the two checkpoints' posteriors; either may be absent
@@ -487,9 +628,15 @@ def recognize(chroma_data: dict, bass: dict, grid: dict, key: dict,
             b = int(np.searchsorted(btc_times, t1))
             if b > a:
                 btc_p = btc_probs[a:b].mean(axis=0)
+        nnls_med = None
+        if nnls_spec is not None:
+            a = int(np.searchsorted(nnls_times, t0))
+            b = int(np.searchsorted(nnls_times, t1))
+            if b - a >= 2:
+                nnls_med = np.median(nnls_spec[a:b], axis=0)
         lab = _label_segment(seg, chroma, energy, bass, note_names, vm, raw,
                              ev_sources=ev_sources, seg_t=(t0, t1),
-                             btc_p=btc_p)
+                             btc_p=btc_p, nnls_med=nnls_med)
         return t0, t1, lab
 
     segments = []
@@ -505,6 +652,13 @@ def recognize(chroma_data: dict, bass: dict, grid: dict, key: dict,
     # (relabel-merge of adjacent segments was tried and REJECTED: the union
     #  label nearly always matches one side, so merging cascades to a single
     #  segment — see RESEARCH.md 2026-07-31)
+
+    if PROG_W > 0:
+        prog = _load_progressions()
+        if prog is not None and len(segments) > 2:
+            _lattice_rescore(segments, prog)
+    for s in segments:
+        s.pop('cands', None)
 
     # merge consecutive identical chord names (ChordHUD import behavior)
     merged = []

@@ -313,13 +313,16 @@ def main(argv=None) -> int:
                             'harm': [f'{p.parent.name}/{p.name}' for p in harm_wavs],
                             'pev': bool(piano_evidence),
                             'sev': bool(synth_evidence),
-                            'btc': btc_stamp if btc_data else None, 'v': 6},
+                            'btc': btc_stamp if btc_data else None,
+                            'nnls': None, 'prog': None, 'v': 12},
                  [chords_json],
                  lambda: chords_mod.recognize(chroma_data, bass, grid, key,
                                               note_names, chords_json,
                                               piano_notes=piano_evidence,
                                               synth_notes=synth_evidence,
-                                              btc=btc_data))
+                                              btc=btc_data,
+                                              nnls_wavs=(stems_dir / 'other.wav',
+                                                         stems_dir / 'bass.wav')))
     segments = chords_mod.load(chords_json)['segments']
     n_chords = len([s for s in segments if s['chord'] != 'N'])
     print(f'    {n_chords} chord segments')

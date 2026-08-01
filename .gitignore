@@ -14,3 +14,7 @@ btc_finetune/*.pt
 btc_finetune/features/
 MIDIandMUSIC/dataset/
 __pycache__/
+
+# Chordonomicon raw CSV (264MB, HuggingFace ailsntua/Chordonomicon, CC BY 4.0)
+# — the distilled progressions.npz IS committed
+auto-transcribe/models/chordonomicon/

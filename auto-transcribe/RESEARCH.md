@@ -11,7 +11,24 @@
 - 实现: `autoscribe/btc_score.py` (双 ckpt 各出 170 类逐帧 posterior → btc.npz 缓存, 特征照抄 prep_features 含分块帧钟 times); chords.py `_label_segment` 候选重打分加 `BTC_ROOT_W 2.5 ×根音边际 + BTC_QUAL_W 1.0 ×精确后验` (SFX_TO_VOCA 22→14 质性映射); cli.py 新增 btc 缓存阶段 (软失败降级), cache.py DOWNSTREAM `btc→chords`; 权重 mtime 进 params → 重训后自动失效
 - **成绩 (34 首 batch_eval 同集对照): root 平均 37.2→39.6% (+2.4pp), 中位 37.2→42.1% (+4.9pp), 兼容 43.5→44.5%**; 32 首实际重跑中 23 涨/5 平/4 微跌 (最大 −1.8); selftest 16/16 不变; 代价每首 +3~10s CPU
 - 移调增强 ×12 (CQT 24bins/oct → 半音=2bin 纯矩阵 roll, 训练时随机 -5..+6, 验证集不增强, -1/N 标签不动) 写进 train.py 并单元验证; run 2 从官方权重重训中 (epoch 0 基线 24.30% 与 run 1 一致)
-- 下一步 (阶段1): NNLS 残差分 → lattice 二次 Viterbi → Chordonomicon 先验; run 2 出 best_v2 后换权重重测 34 首
+
+**阶段0/1 消融全记录 (2026-08-01 下午, 34 首 batch_eval 同集, selftest 全程 16/16)**
+
+| 轮 | 配置 | root均值 | root中位 | 兼容 | 判决 |
+|---|---|---|---|---|---|
+| A | 基线 | 37.2 | 37.2 | 43.5 | — |
+| B | +BTC双权重(run1微调) | **39.6** | **42.1** | 44.5 | ✅ 保留 |
+| C | +BTC(run2增强微调) | 39.0 | 40.9 | 44.4 | ✅ 保留 run2 |
+| D | C+NNLS原始谱 | 38.8 | 41.3 | 43.4 | ❌ 中性 |
+| E | C+NNLS对数压缩 | 38.8 | 42.5 | 42.0 | ❌ 中性 |
+| F | C+lattice先验 W1.2 | 38.5 | 40.0 | 44.0 | ❌ 微负 |
+| G | C+lattice先验 W0.5 | 38.7 | 41.1 | 44.7 | ❌ 中性偏负 |
+
+- **B→C 之差是训练歌泄露假象**: 34 首评测歌里 28 首是微调训练歌; run1 训练损失压到 1.17 (背得更死) 在背过的歌上占虚便宜, run2 (增强, 训练损失 2.70, val 29.23% > 28.4%) 在 4 首 held-out 验证歌上与 run1 完全打平 → **对没见过的新歌 run2 = 更优, 保留 run2-epoch28 为 best.pt** (run1 归档 best_run1.pt)。教训: 微调模型的好坏只能用 held-out 判, 34 首批量分反而会骗人
+- **NNLS 谐波拟合 (Mauch) 两变体证伪于当前实现**: 段中位 CQT + 受限拟合残差重排 top-8, 原始谱和 log1p 压缩谱都中性 (机制单元测试正确: 合成 Cmaj7 下真和弦残差最低)。要兑现文献 +6pp 需要 Mauch 完整前端 (调音校正/背景减除/音色适配字典) — 已降级为实验开关 (NNLS_W=0), 勿简单重试
+- **Chordonomicon 进行先验证伪于本曲库**: 67.9 万歌/5054 万 bigram 蒸馏成 (8,12,8) 转移表 (`models\progressions.npz`, build_progressions.py, 榜首=属七五度圈解决/sus4回解, 统计学到的乐理完全正确), 但接进段级 lattice 后 W=1.2 −0.5pp / W=0.5 −0.3pp — **本曲库爱用非常规进行, UG 系套路先验把对的读法拽向陈词滥调**。默认关 (PROG_W=0); lattice 机制保留 (是未来 edge/node 打分器的容器); 解析陷阱: 该数据集升号写作 s (Cs=C#), 但 Dsus4 的 s 不是升号 (regex 需 s(?!us))
+- **今日净战果: root 37.2 → 39.0 (+1.8pp 真实泛化口径) / 中位 +3.7pp, 全部来自 BTC 双权重投票**; 微调换代照常自动生效 (best.pt mtime 进缓存 params)
+- 下一步 (按价值重排): ①HookTheory 子集微调 (user 已授权, 数据大招, 直接强化已被证明有效的 BTC 路线) ②Claude 符号裁决器 (分歧段, 订阅 headless) ③Chordino 异质第三票 ④条件高斯 p(chroma|和弦)
 
 ## 首次 BTC 微调 (2026-08-01 凌晨, 40 首数据集)
 
