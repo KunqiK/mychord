@@ -37,6 +37,28 @@ def _write_mid(notes, path: Path, bpm: float) -> None:
     mid.save(str(path))
 
 
+def _energy_gate(notes, wav: Path):
+    """Drop notes where the stem itself is near-silent: separation residue
+    smeared into quiet regions is the main source of ghost notes."""
+    import librosa
+    import numpy as np
+    from .audio_io import load_mono
+    y, sr = load_mono(wav)
+    rms = librosa.feature.rms(y=y, frame_length=2048, hop_length=512)[0]
+    times = librosa.times_like(rms, sr=sr, hop_length=512)
+    active = rms[rms > 1e-5]
+    if not len(active):
+        return []
+    floor = max(10 ** (-45 / 20), 0.15 * float(np.percentile(active, 90)))
+    kept = []
+    for n in notes:
+        a = int(np.searchsorted(times, n['start']))
+        b = max(int(np.searchsorted(times, n['end'])), a + 1)
+        if float(np.median(rms[a:b])) >= floor:
+            kept.append(n)
+    return kept
+
+
 def transcribe_stems(stems_dir: Path, bpm: float | None = None,
                      cache_dir: Path | None = None, log=print) -> list[Path]:
     from .melody import _predict_notes, basic_pitch_available
@@ -56,8 +78,12 @@ def transcribe_stems(stems_dir: Path, bpm: float | None = None,
                 piano_mod.transcribe(wav, pj)
                 notes = json.loads(pj.read_text(encoding='utf-8'))['notes']
             elif basic_pitch_available():
-                notes = _predict_notes(wav, onset=0.3, frame=0.2, minlen=60.0,
+                # standard thresholds, NOT the over-detecting draft settings:
+                # this mode wants faithful stems, less DAW cleanup (user
+                # feedback 2026-07-31: strings had 2492 notes of bleed)
+                notes = _predict_notes(wav, onset=0.5, frame=0.3, minlen=90.0,
                                        fmin=30.0, fmax=3000.0)
+                notes = _energy_gate(notes, wav)
             else:
                 continue
             if not notes:
