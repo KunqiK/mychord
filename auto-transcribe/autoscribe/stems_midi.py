@@ -85,7 +85,7 @@ def transcribe_stems(stems_dir: Path, bpm: float | None = None,
                 # confidence in basic-pitch and standard settings kill them
                 if name == 'bass':
                     notes = _predict_notes(wav, onset=0.3, frame=0.2,
-                                           minlen=90.0, fmin=25.0, fmax=500.0)
+                                           minlen=90.0, fmin=25.0, fmax=1200.0)
                 else:
                     notes = _predict_notes(wav, onset=0.5, frame=0.3,
                                            minlen=90.0, fmin=30.0, fmax=3000.0)
