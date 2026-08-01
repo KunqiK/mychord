@@ -71,8 +71,12 @@ REGISTRY: dict[str, dict] = {
         'desc': 'BS-Roformer-SW 6 轨 (MVSEP 排行钢琴/吉他双第一, 超 LALAL.AI)',
     },
     'synth': _mega('synth'),
-    'strings': _mega('strings'),
-    'woodwind': _mega('woodwind'),
+    # cascade: subtract the SW guitar stem (leaderboard #1, SDR 9.05) from
+    # the input before these models run — the Mega-53 strings/woodwind heads
+    # are draft-quality and pull guitar into their stem otherwise (user
+    # report 2026-07-31). Requires sw6 in the same --stems run (拆乐器 does).
+    'strings': {**_mega('strings'), 'subtract': ('guitar',)},
+    'woodwind': {**_mega('woodwind'), 'subtract': ('guitar',)},
     'eguitar': _mega('electric-guitar'),
     'aguitar': _mega('acoustic-guitar'),
     'guitar': {
@@ -202,13 +206,27 @@ def run_model(input_wav: Path, ext_dir: Path, key: str, log=print) -> None:
 
     out_dir = ext_dir / key
     raw_dir = ext_dir / f'_{key}_raw'
-    in_dir = ext_dir / '_in'
+    subtract = [ext_dir / 'sw6' / f'{s}.flac'
+                for s in spec.get('subtract', ())]
+    subtract = [p for p in subtract if p.exists()]
+    in_dir = ext_dir / (f'_in_{key}' if subtract else '_in')
     for d in (raw_dir, out_dir):
         if d.exists():
             shutil.rmtree(d)
     in_dir.mkdir(parents=True, exist_ok=True)
     mix_link = in_dir / 'mix.wav'
-    if not mix_link.exists():
+    if subtract:
+        # cascade input: mixture minus already-separated stems, so this
+        # model cannot re-claim their content (e.g. guitar into strings)
+        import soundfile as sf
+        mix, sr = _read_audio(input_wav)
+        for p in subtract:
+            st, _ = _read_audio(p)
+            n = min(len(mix), len(st))
+            mix = mix[:n] - st[:n]
+        sf.write(str(mix_link), mix, sr, subtype='PCM_16')
+        log(f'    [{key}] cascade input: minus {", ".join(p.stem for p in subtract)}')
+    elif not mix_link.exists():
         shutil.copyfile(input_wav, mix_link)
 
     log(f'    [{key}] {spec["desc"]}')
@@ -255,6 +273,8 @@ def separate_ext(input_wav: Path, ext_dir: Path, keys: list[str],
             continue
         run_model(input_wav, ext_dir, key, log=log)
     shutil.rmtree(ext_dir / '_in', ignore_errors=True)
+    for d in ext_dir.glob('_in_*'):
+        shutil.rmtree(d, ignore_errors=True)
 
 
 def export_stems(ext_dir: Path, keys: list[str], dest: Path,
