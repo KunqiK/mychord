@@ -37,6 +37,7 @@ def find_bpm(image_path):
 
 
 bpm = find_bpm(img)
+force_ts = sys.argv[2] if len(sys.argv) > 2 and '/' in sys.argv[2] else None
 import music21
 score = music21.converter.parse(xml)
 if bpm:
@@ -44,5 +45,12 @@ if bpm:
     print(f'识别到速度标记: BPM = {bpm}')
 else:
     print('图里没找到「♩= 数字」速度标记, MIDI 用默认 120 (可在 DAW 改)')
+if force_ts:
+    # OMR 常把拍号认错/谱子本身标错 — 强制替换所有拍号
+    for ts in list(score.recurse().getElementsByClass(music21.meter.TimeSignature)):
+        ts.activeSite.remove(ts)
+    for part in score.parts:
+        part.insert(0, music21.meter.TimeSignature(force_ts))
+    print(f'已强制拍号 = {force_ts}')
 score.write('midi', base + '.mid')
 print('MIDI 已生成: ' + base + '.mid')
