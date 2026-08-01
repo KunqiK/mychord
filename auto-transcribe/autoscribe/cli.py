@@ -169,6 +169,12 @@ def main(argv=None) -> int:
         copied = sepext_mod.export_stems(ext_dir, stem_keys, out_dir / 'stems')
         print(f'    {len(copied)} stem files → {out_dir / "stems"}')
         if args.stems_only:
+            # 新模式: every stem gets its own MIDI so the user can pick the
+            # chord/melody tracks in the DAW (pass --bpm for grid alignment)
+            from . import stems_midi
+            print('  [stems-midi] transcribing each stem…')
+            stems_midi.transcribe_stems(out_dir / 'stems', bpm=args.bpm,
+                                        cache_dir=sc.dir)
             print(f'all done in {time.time() - t_start:.0f}s → {out_dir}')
             return 0
     elif args.stems_only:
