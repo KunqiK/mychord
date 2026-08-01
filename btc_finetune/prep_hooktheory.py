@@ -170,9 +170,58 @@ def download(limit: int) -> None:
     print(f'download done: ok {ok} skip {skip} fail {fail}', flush=True)
 
 
+def features() -> None:
+    """Pass 3: downloaded audio -> features_ht\\<yt>.npz (same schema as
+    prep_features: unnormalized log-CQT + large_voca frame labels). Only the
+    annotated [t0, t1] span is used; frames not covered by a harmony event
+    stay -1 (unlabeled) — a gap means "not annotated", NOT "no chord"."""
+    import numpy as np
+    import prep_features as pf
+    out_dir = HERE / 'features_ht'
+    out_dir.mkdir(exist_ok=True)
+    clips = {}
+    with open(CLIPS, encoding='utf-8') as f:
+        for ln in f:
+            e = json.loads(ln)
+            clips[e['yt']] = e
+    done = skipped = failed = 0
+    for audio in sorted(AUDIO_DIR.glob('*.*')):
+        yt = audio.stem
+        e = clips.get(yt)
+        out = out_dir / f'{yt}.npz'
+        if e is None or out.exists():
+            skipped += 1
+            continue
+        try:
+            wav = pf.load_audio(audio)
+            a = int(e['t0'] * pf.SR)
+            b = min(int(e['t1'] * pf.SR), len(wav))
+            if b - a < pf.SR * 5:
+                raise ValueError('clip too short (bad download?)')
+            feat, times = pf.audio_to_feature(wav[a:b])
+            times = times + e['t0']              # back to absolute video time
+            ev_t0 = np.array([x['t0'] for x in e['events']])
+            ev_t1 = np.array([x['t1'] for x in e['events']])
+            ev_id = np.array([pf.chord_to_id(x['chord'])
+                              for x in e['events']], dtype=np.int64)
+            lab = np.full(len(times), -1, dtype=np.int64)
+            idx = np.searchsorted(ev_t0, times, side='right') - 1
+            ok = (idx >= 0) & (times < ev_t1[np.clip(idx, 0, None)])
+            lab[ok] = ev_id[idx[ok]]
+            np.savez_compressed(out, feature=feat, label=lab)
+            done += 1
+        except Exception as ex:                                # noqa: BLE001
+            failed += 1
+            print(f'  [fail] {yt}: {ex!r}', flush=True)
+    print(f'features: {done} built, {skipped} skipped, {failed} failed '
+          f'-> {out_dir.name}', flush=True)
+
+
 if __name__ == '__main__':
     if len(sys.argv) > 1 and sys.argv[1] == '--download':
         n = int(sys.argv[2]) if len(sys.argv) > 2 else PILOT_N
         download(n)
+    elif len(sys.argv) > 1 and sys.argv[1] == '--features':
+        features()
     else:
         build()

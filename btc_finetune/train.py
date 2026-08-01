@@ -38,6 +38,8 @@ from btc_model import BTC_model            # noqa: E402
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
 FEAT_DIR = HERE / 'features'
+HT_DIR = HERE / 'features_ht'      # HookTheory clips (optional, auto-detected)
+USER_REPEAT = 2                    # upweight the user's own songs vs HT volume
 SPLIT_JSON = HERE / 'split.json'
 LATEST = HERE / 'latest.pt'
 PRETRAINED = BTC_DIR / 'test' / 'btc_model_large_voca.pt'
@@ -83,11 +85,13 @@ def load_split() -> tuple[list[str], list[str]]:
     return train, val
 
 
-def load_windows(bases: list[str], stride: int, mean: float, std: float):
-    """Return list of (feature_tensor(T,144) per song, window start idx)."""
+def load_windows(entries, stride: int, mean: float, std: float):
+    """entries = [(dir, base, repeat)] -> (songs, windows). `repeat`
+    duplicates a song's windows to upweight it in the epoch mix (the user's
+    own 38 songs must not drown in HookTheory volume)."""
     songs, windows = [], []
-    for si, b in enumerate(bases):
-        d = np.load(FEAT_DIR / f'{b}.npz')
+    for si, (root, b, rep) in enumerate(entries):
+        d = np.load(root / f'{b}.npz')
         feat = (d['feature'] - mean) / std
         lab = d['label']
         songs.append((torch.from_numpy(feat.astype(np.float32)),
@@ -95,7 +99,7 @@ def load_windows(bases: list[str], stride: int, mean: float, std: float):
         T = len(lab)
         for s in range(0, T - TIMESTEP + 1, stride):
             if (lab[s:s + TIMESTEP] >= 0).all():
-                windows.append((si, s))
+                windows.extend([(si, s)] * rep)
     return songs, windows
 
 
@@ -177,11 +181,18 @@ def main() -> None:
         log('FRESH start from pretrained btc_model_large_voca.pt')
 
     train_bases, val_bases = load_split()
-    tr_songs, tr_windows = load_windows(train_bases, TRAIN_STRIDE, mean, std)
-    va_songs, va_windows = load_windows(val_bases, VAL_STRIDE, mean, std)
-    log(f'data: {len(train_bases)} train songs -> {len(tr_windows)} windows '
-        f'(stride {TRAIN_STRIDE}), {len(val_bases)} val songs -> '
-        f'{len(va_windows)} windows | lr {LR} batch {BATCH} '
+    ht_bases = sorted(p.stem for p in HT_DIR.glob('*.npz')) \
+        if HT_DIR.is_dir() else []
+    tr_entries = [(FEAT_DIR, b, USER_REPEAT if ht_bases else 1)
+                  for b in train_bases] \
+        + [(HT_DIR, b, 1) for b in ht_bases]
+    tr_songs, tr_windows = load_windows(tr_entries, TRAIN_STRIDE, mean, std)
+    va_songs, va_windows = load_windows(
+        [(FEAT_DIR, b, 1) for b in val_bases], VAL_STRIDE, mean, std)
+    log(f'data: {len(train_bases)} user + {len(ht_bases)} hooktheory songs '
+        f'-> {len(tr_windows)} windows (stride {TRAIN_STRIDE}, '
+        f'user x{USER_REPEAT if ht_bases else 1}), {len(val_bases)} val '
+        f'songs -> {len(va_windows)} windows | lr {LR} batch {BATCH} '
         f'threads {NUM_THREADS}')
 
     if start_epoch == 1:
