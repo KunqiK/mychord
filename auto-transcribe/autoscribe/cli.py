@@ -243,14 +243,18 @@ def main(argv=None) -> int:
         import librosa
         floor_midi = int(librosa.note_to_midi(args.lead_floor))
         melody_json = sc.path('melody.json')
+        synth_stem = sc.path('stems_ext') / 'synth' / 'synth.flac'
+        has_synth = synth_stem.exists()
         sc.run_stage('melody',
                      {'source': args.melody_source, 'floor': floor_midi,
-                      'gate': args.vocal_gate, 'v': 3},
+                      'gate': args.vocal_gate, 'synth': has_synth, 'v': 3},
                      [melody_json],
                      lambda: melody_mod.extract(stems_dir, melody_json,
                                                 source=args.melody_source,
                                                 lead_floor_midi=floor_midi,
-                                                vocal_gate=args.vocal_gate))
+                                                vocal_gate=args.vocal_gate,
+                                                synth_wav=synth_stem if has_synth
+                                                else None))
         melody = melody_mod.load(melody_json)
         print(f"    melody: {melody['source']}/{melody['engine']} "
               f"{len(melody['notes'])} notes"
@@ -298,7 +302,8 @@ def main(argv=None) -> int:
              for p in piano_data.get('pedal', [])],
             str(out_dir / 'piano.mid'))
 
-    if melody and (melody.get('poly') or melody.get('lead_line')):
+    if melody and (melody.get('poly') or melody.get('lead_line')
+                   or melody.get('synth_poly')):
         def scale_snap(notes):
             if not args.lines_scale_snap:
                 return notes
@@ -313,6 +318,8 @@ def main(argv=None) -> int:
             tracks.append(('Lead candidate (skyline)', scale_snap(melody['lead_line'])))
         if melody.get('poly'):
             tracks.append(('Other stem (full poly draft)', scale_snap(melody['poly'])))
+        if melody.get('synth_poly'):
+            tracks.append(('Synth stem draft (cleaner)', scale_snap(melody['synth_poly'])))
         if piano_data and piano_data['notes']:
             tracks.append(('Piano (ByteDance, quantized)', piano_data['notes']))
         midi_out.write_lines(tracks, mapper, beats['bpm'],

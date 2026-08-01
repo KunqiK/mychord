@@ -177,7 +177,8 @@ def _vocal_section_gate(notes, vocals_wav: Path, mix_wav: Path,
 
 
 def extract(stems_dir: Path, out_json: Path, source: str = 'auto',
-            lead_floor_midi: int = 60, vocal_gate: float = 0.25) -> dict:
+            lead_floor_midi: int = 60, vocal_gate: float = 0.25,
+            synth_wav: Path | None = None) -> dict:
     vocals = stems_dir / 'vocals.wav'
     other = stems_dir / 'other.wav'
     if source == 'auto':
@@ -190,6 +191,7 @@ def extract(stems_dir: Path, out_json: Path, source: str = 'auto',
     stem = vocals if source == 'vocals' else other
     poly = []
     lead_line = []
+    synth_poly = []
     if basic_pitch_available():
         engine = 'basic-pitch'
         raw = _predict_notes(stem)
@@ -208,6 +210,12 @@ def extract(stems_dir: Path, out_json: Path, source: str = 'auto',
             poly = _predict_notes(other, onset=0.3, frame=0.2, minlen=60.0,
                                   fmin=60.0, fmax=2500.0)
             lead_line = _skyline(poly, lead_floor_midi)
+        # cleaner draft off the roformer synth stem when --stems synth ran:
+        # measured on SATELLITE GT — 50% lead coverage with half the notes of
+        # the other-stem draft (which mixes arps/FX/piano into the same pile)
+        if synth_wav is not None and synth_wav.exists():
+            synth_poly = _predict_notes(synth_wav, onset=0.3, frame=0.2,
+                                        minlen=60.0, fmin=60.0, fmax=2500.0)
     else:
         engine = 'pyin'
         notes = _pyin_notes(stem)
@@ -220,7 +228,8 @@ def extract(stems_dir: Path, out_json: Path, source: str = 'auto',
                 for n in ns]
 
     result = {'source': source, 'engine': engine, 'notes': pack(notes),
-              'poly': pack(poly), 'lead_line': pack(lead_line)}
+              'poly': pack(poly), 'lead_line': pack(lead_line),
+              'synth_poly': pack(synth_poly)}
     out_json.write_text(json.dumps(result), encoding='utf-8')
     return result
 

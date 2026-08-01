@@ -47,6 +47,16 @@ NeuralNote 不替代管线,做**难段补扒**:把 `cache\<歌>\stems\vocals.wav
 
 **结论:瓶颈在表示层不在算法** —— lead 埋在强相关的 supersaw 堆里,需要专门训练的分离模型。已搜证:公开社区(UVR/MSST/MVSEP)现有模型全是人声方向(karaoke/lead vocal),**没有器乐 lead 分离模型**。
 
+### 分离模型路线第一轮实测 (2026-07-31, 同 GT, eval_lead_stem.py)
+
+| 分离 stem + basic-pitch 敏感阈值 | 帧级最高音 pc | 帧级任意音 pc | GT 音符覆盖 | 音符数 |
+|---|---|---|---|---|
+| lead-synth 专模 (SDR 4.99, ep1) | 24.4% | 38.9% | 40.1% | 4619 |
+| **Mega-53 synth 轨** | **30.9%** | **53.6%** | **50.3%** | **5707** |
+| (对照) demucs other 复音草稿 | 22-31.5% (各法) | — | 61% | ~10000 |
+
+读法:**Mega-53 synth 轨让"普通 basic-pitch"直接摸到了原来定制 CQT 算法的 31.5% 天花板**,且用一半音符数覆盖 50% GT —— 表示层确实被分离模型改善了,但 synth 轨里 lead/pad/arp 仍混在一起,"最高音=lead"的假设还是不成立。lead-synth 专模 (仅 1 epoch) 低于基线,当"lead 活跃段门控"可能比当音高来源更有用。**下一步最有价值的组合:synth 轨草稿进 lines.mid**(比 other 轨草稿干净一倍),以及 synth 轨 ∩ lead-synth 能量门控。
+
 **可用的半自动路径(已验证数字)**:lines.mid 复音草稿覆盖 **Lead 61% / Arp 81%**(敏感阈值,力度=置信度)→ DAW 里力度过滤 + loop 对听删修。Arp 尤其可行:模式重复,修对一遍 pattern 即可复制。
 
 ## 乐器级分离生态大调查 (2026-07-31, 10 路并行研究)
@@ -83,7 +93,8 @@ NeuralNote 不替代管线,做**难段补扒**:把 `cache\<歌>\stems\vocals.wav
 
 ## 路线图(按价值排序)
 
-1. **✅ 乐器级分离已接入** — 待办: SW/Mega/leadsynth 对 GT 实测打分 (见上)
+1. **✅ 乐器级分离已接入** — leadsynth/synth 已实测 (见上); SW 6轨钢琴/吉他验证进行中
+1b. **synth 轨复音草稿进 lines.mid** (实测比 other 轨干净一倍, 覆盖 50%/5707 音符 vs 61%/1万) — 当 `--stems synth` 已跑时 melody 阶段追加一条轨
 2. **和弦边界 P0 补丁** (节拍位置相关换弦代价, 零依赖)
 3. **mt3-infer / YourMT3** 多乐器 MIDI 草稿实验 (对 GT 打分后决定去留)
 4. 每乐器专家转录: SwiftF0 (人声 F0, pip, MIT), ADTOF-pytorch (鼓), transkun (钢琴 A/B)
