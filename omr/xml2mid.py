@@ -53,24 +53,29 @@ if force_ts:
     measures = [list(p.getElementsByClass(music21.stream.Measure))
                 for p in parts]
     n_m = max(len(ms) for ms in measures)
-    durs = []
-    for i in range(n_m):
-        d = max((ms[i].highestTime for ms in measures if i < len(ms)),
-                default=0.0)
-        durs.append(d)
+    slot = float(music21.meter.TimeSignature(force_ts).barDuration.quarterLength)
     new_score = music21.stream.Score()
     if bpm:
         new_score.insert(0, music21.tempo.MetronomeMark(number=bpm))
     for ms in measures:
         np_ = music21.stream.Part()
         np_.insert(0, music21.meter.TimeSignature(force_ts))
-        t = 0.0
         for i, m in enumerate(ms):
-            for el in m.notesAndRests:
+            t = i * slot
+            kept = [el for el in m.notesAndRests if el.offset < slot]
+            for el in kept:
+                # clip anything spilling past the barline (OMR overfull
+                # errors), and extend the final sounding note to the
+                # barline (OMR loses sustain; matches sheet preview)
+                end = min(float(el.offset) + float(el.quarterLength), slot)
+                el.quarterLength = max(end - float(el.offset), 0.125)
                 np_.insert(t + el.offset, el)
-            t += durs[i]
+            if kept and kept[-1].isNote or kept and hasattr(kept[-1], 'pitches'):
+                last = kept[-1]
+                last.quarterLength = max(slot - float(last.offset),
+                                         float(last.quarterLength))
         new_score.insert(0, np_)
     score = new_score
-    print(f'已强制拍号 = {force_ts}, 空拍已压紧 ({n_m} 小节)')
+    print(f'已强制拍号 = {force_ts} (每小节 {slot} 拍, 超出裁剪/结尾延音填满, {n_m} 小节)')
 score.write('midi', base + '.mid')
 print('MIDI 已生成: ' + base + '.mid')
