@@ -165,6 +165,9 @@ def main():
     ap.add_argument('--drums', default='Drum,Drum #2,KICK,Drums')
     ap.add_argument('--offset', type=float, default=None,
                     help='manual audio-minus-midi offset (skip drum alignment)')
+    ap.add_argument('--auto', action='store_true',
+                    help='auto-classify GT tracks into harmony/melody/bass/'
+                         'drums (for full multitrack reference MIDIs)')
     ap.add_argument('--details', action='store_true')
     args = ap.parse_args()
 
@@ -172,6 +175,16 @@ def main():
     tracks, gt_bpm = load_midi_notes(Path(args.midi))
     print(f'GT tracks: {sorted(tracks)}')
     print(f'GT BPM: {gt_bpm:.2f}')
+
+    if args.auto:
+        from gt_tracks import pick
+        sel = pick(tracks)
+        args.harmony = ','.join(sel['harmony'])
+        args.melody = ','.join(sel['melody'][:1])
+        args.bass = ','.join(sel['bass'])
+        args.drums = ','.join(sel['drums'])
+        print(f"auto tracks: harmony=[{args.harmony}] melody=[{args.melody}] "
+              f"bass=[{args.bass}] drums=[{args.drums}]")
 
     def collect(namelist):
         out = []
