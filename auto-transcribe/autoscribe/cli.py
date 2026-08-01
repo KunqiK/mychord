@@ -233,6 +233,30 @@ def main(argv=None) -> int:
     from .hud_port import key_spelling
     _, _, _, note_names = key_spelling(key['tonic_pc'], key['mode'])
 
+    # melody runs BEFORE chords: its synth-stem poly draft doubles as pad
+    # evidence for chord labeling (folded under the piano evidence)
+    melody = None
+    if not args.no_melody and args.melody_source != 'none':
+        import librosa
+        floor_midi = int(librosa.note_to_midi(args.lead_floor))
+        melody_json = sc.path('melody.json')
+        synth_stem = sc.path('stems_ext') / 'synth' / 'synth.flac'
+        has_synth = synth_stem.exists()
+        sc.run_stage('melody',
+                     {'source': args.melody_source, 'floor': floor_midi,
+                      'gate': args.vocal_gate, 'synth': has_synth, 'v': 3},
+                     [melody_json],
+                     lambda: melody_mod.extract(stems_dir, melody_json,
+                                                source=args.melody_source,
+                                                lead_floor_midi=floor_midi,
+                                                vocal_gate=args.vocal_gate,
+                                                synth_wav=synth_stem if has_synth
+                                                else None))
+        melody = melody_mod.load(melody_json)
+        print(f"    melody: {melody['source']}/{melody['engine']} "
+              f"{len(melody['notes'])} notes"
+              + (f" + poly {len(melody.get('poly', []))}" if melody.get('poly') else ''))
+
     # piano stage runs BEFORE chords when a dedicated piano stem exists (from
     # --stems 6): its note-level voicings are the primary chord evidence —
     # the reference chart that defines "correct" is the comping instrument.
@@ -259,14 +283,17 @@ def main(argv=None) -> int:
     piano_evidence = piano_data['notes'] \
         if piano_data and piano_data['notes'] and piano_stem_id == 'piano' \
         else None
+    synth_evidence = melody.get('synth_poly') if melody else None
     chords_json = sc.path('chords.json')
     sc.run_stage('chords', {'key': key['active_key'], 'voc_w': voc_w,
                             'harm': [f'{p.parent.name}/{p.name}' for p in harm_wavs],
-                            'pev': bool(piano_evidence), 'v': 3},
+                            'pev': bool(piano_evidence),
+                            'sev': bool(synth_evidence), 'v': 4},
                  [chords_json],
                  lambda: chords_mod.recognize(chroma_data, bass, grid, key,
                                               note_names, chords_json,
-                                              piano_notes=piano_evidence))
+                                              piano_notes=piano_evidence,
+                                              synth_notes=synth_evidence))
     segments = chords_mod.load(chords_json)['segments']
     n_chords = len([s for s in segments if s['chord'] != 'N'])
     print(f'    {n_chords} chord segments')
@@ -276,28 +303,6 @@ def main(argv=None) -> int:
         if new_key['name'] != key['name']:
             print(f"    key revised by chord evidence: {key['name']} → {new_key['name']}")
             key = new_key
-
-    melody = None
-    if not args.no_melody and args.melody_source != 'none':
-        import librosa
-        floor_midi = int(librosa.note_to_midi(args.lead_floor))
-        melody_json = sc.path('melody.json')
-        synth_stem = sc.path('stems_ext') / 'synth' / 'synth.flac'
-        has_synth = synth_stem.exists()
-        sc.run_stage('melody',
-                     {'source': args.melody_source, 'floor': floor_midi,
-                      'gate': args.vocal_gate, 'synth': has_synth, 'v': 3},
-                     [melody_json],
-                     lambda: melody_mod.extract(stems_dir, melody_json,
-                                                source=args.melody_source,
-                                                lead_floor_midi=floor_midi,
-                                                vocal_gate=args.vocal_gate,
-                                                synth_wav=synth_stem if has_synth
-                                                else None))
-        melody = melody_mod.load(melody_json)
-        print(f"    melody: {melody['source']}/{melody['engine']} "
-              f"{len(melody['notes'])} notes"
-              + (f" + poly {len(melody.get('poly', []))}" if melody.get('poly') else ''))
 
     # ── outputs (always regenerated) ──
     print('  [outputs]')

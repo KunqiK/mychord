@@ -61,16 +61,33 @@ EXOTIC_SFX = {'7b9', '7#9', 'mMaj7', 'augMaj7'}   # rarely correct on dirty chro
 EXOTIC_PENALTY = 0.8                # prior against exotic labels in ties
 EVIDENCE_W = 6.0                    # weight of mean per-tone evidence strength
 ROOT_EV_W = 3.0                     # extra weight on the root tone's evidence
+UNCOV_W = 0.0                       # penalty per unit of evidence mass the reading leaves
+                                    # unexplained — measured NEUTRAL-to-worse (evidence pc
+                                    # sets carry ~25% spurious pcs, so demanding full
+                                    # coverage backfires); kept as an experiment knob
 # (candidates were previously ranked on pc membership alone — a weak bleed pc
 #  like a Bb pedal could anchor a wrong-root reading such as Bbm9 over the
 #  user's Fm7/Bb; scoring by evidence strength keeps the root on strong tones)
-# ── piano-stem note evidence (the user's reference chart IS the comping
+# ── stem note evidence (the user's reference chart IS the comping
 #    instrument: tertian stacking over its voiced pcs is how chords get named) ──
 PIANO_PC_KEEP = 0.25                # keep pcs >= this share of the strongest pc
 PIANO_MIN_PCS = 3                   # need a real voicing, not a fill
 PIANO_MIN_COVER = 0.35              # piano must sound over this share of the segment
 PIANO_ONSET_EPS = 0.05              # chord-onset grouping window (s)
 PIANO_ONSET_DISCOUNT = 0.5          # change-cost multiplier near a piano voicing onset
+SYNTH_MIN_COVER = 0.8               # synth-stem-alone fallback needs denser coverage
+SYNTH_BLEND_W = 0.15                # synth (pad) evidence folded UNDER gating piano evidence:
+                                    # the piano-stem transcription drops quiet mid-voice
+                                    # tones — often the ROOT itself (Fm7/Bb came out as
+                                    # {Ab,Bb,C,Eb}, no F) — while the pad voices it
+PIANO_BLEND_W = 0.0                 # piano folded under gating synth evidence: keep OFF —
+                                    # a piano source that failed its own gate is noise
+BLEED_FACTOR = 1.0                  # sustained-in notes count fully (penalizing them measured WORSE
+                                    # — held pedal chords are genuine harmony, not bleed)
+SPLIT_AT_ONSETS = False             # cutting segments at piano onsets measured WORSE on root
+                                    # (short pieces lose context) despite +compat/+boundary-F;
+                                    # kept as an experiment switch
+MIN_PIECE_BEATS = 1.5               # do not create pieces shorter than this
 
 
 def _emissions(chroma: np.ndarray, energy: np.ndarray, bass: dict) -> np.ndarray:
@@ -105,18 +122,19 @@ def _emissions(chroma: np.ndarray, energy: np.ndarray, bass: dict) -> np.ndarray
     return logits - logits.max(axis=1, keepdims=True)
 
 
-def _piano_pc_weights(piano_notes, bounds: np.ndarray) -> np.ndarray:
-    """(12, F) duration x velocity mass of piano-stem notes per synced frame."""
-    F = len(bounds) - 1
-    W = np.zeros((12, F))
-    for n in piano_notes:
-        a = int(np.searchsorted(bounds, n['start'], side='right')) - 1
-        b = int(np.searchsorted(bounds, n['end'], side='left'))
-        for f in range(max(a, 0), min(b + 1, F)):
-            ov = min(n['end'], bounds[f + 1]) - max(n['start'], bounds[f])
-            if ov > 0:
-                W[n['midi'] % 12, f] += ov * n.get('amp', 0.5)
-    return W
+def _note_pc_weights(notes, t0: float, t1: float) -> np.ndarray:
+    """(12,) duration x velocity pc mass of notes inside [t0, t1).
+
+    Notes that onset before the segment are bleed from the previous voicing
+    (sustain/pedal tails, separation smear) and count at BLEED_FACTOR."""
+    w = np.zeros(12)
+    for n in notes:
+        ov = min(n['end'], t1) - max(n['start'], t0)
+        if ov <= 0.03:
+            continue
+        f = 1.0 if n['start'] >= t0 - 0.08 else BLEED_FACTOR
+        w[n['midi'] % 12] += ov * n.get('amp', 0.5) * f
+    return w
 
 
 def _piano_chord_onsets(piano_notes) -> list[float]:
@@ -187,24 +205,45 @@ def _merge_segments(path: np.ndarray, bounds: np.ndarray,
 
 
 def _label_segment(seg, chroma, energy, bass, note_names, viterbi_margin,
-                   raw=None, piano_w=None, seg_dur=None):
+                   raw=None, ev_sources=None, seg_t=None):
     f0, f1 = seg['f0'], seg['f1']
     med = np.median(chroma[:, f0:f1], axis=1)
     m = med.max() or 1.0
     med = med / m
     piano_used = False
-    if piano_w is not None:
-        # piano-stem voicing evidence: duration x velocity mass per pc across
-        # the segment. When the comping instrument actually voices a chord
-        # here, its pcs ARE the chord (tertian stacking downstream) — far
-        # cleaner than chroma medians, which mix pads/leads/bleed
-        pw = piano_w[:, f0:f1].sum(axis=1)
-        if pw.max() > 0 and seg_dur:
+    ev_used = 'chroma'
+    ev_bass = None
+    if ev_sources and seg_t:
+        # stem note evidence: duration x velocity pc mass over the segment.
+        # When the comping instrument actually voices a chord here, its pcs
+        # ARE the chord (tertian stacking downstream) — far cleaner than
+        # chroma medians, which mix pads/leads/bleed. Sources are tried in
+        # trust order (piano first, synth-stem fallback for buried sections).
+        t0, t1 = seg_t
+        seg_dur = max(t1 - t0, 1e-3)
+        norms = []
+        for src_name, notes, min_cover, w in ev_sources:
+            pw = _note_pc_weights(notes, t0, t1)
+            if pw.max() <= 0:
+                continue
             strong = pw >= PIANO_PC_KEEP * pw.max()
             cover = pw.sum() / seg_dur          # ~ weighted sounding seconds
-            if strong.sum() >= PIANO_MIN_PCS and cover >= PIANO_MIN_COVER:
-                med = pw / pw.max()
-                piano_used = True
+            passes = strong.sum() >= PIANO_MIN_PCS and cover >= min_cover
+            norms.append((src_name, pw / pw.max(), w, passes, notes))
+        gating = next((x for x in norms if x[3]), None)
+        if gating is not None:
+            # the gating source anchors the blend at full weight; the others
+            # fold in at their configured weight so e.g. the pad can supply
+            # tones the piano-stem transcription lost (often the root)
+            blend = np.zeros(12)
+            for name, pn, w, _passes, _notes in norms:
+                blend += (1.0 if name == gating[0] else w) * pn
+            med = blend / (blend.max() or 1.0)
+            piano_used = True
+            ev_used = gating[0]
+            lows = [n['midi'] for n in gating[4]
+                    if min(n['end'], t1) - max(n['start'], t0) > 0.05]
+            ev_bass = min(lows) % 12 if lows else None
     if not piano_used and raw is not None:
         # sustain x magnitude on raw hop frames: pads hold the whole segment,
         # melody notes flicker — suppresses lead bleed the median can't
@@ -259,7 +298,7 @@ def _label_segment(seg, chroma, energy, bass, note_names, viterbi_margin,
         if bass_pc is not None and bass_pc != root1:
             name += '/' + note_names[bass_pc]
         return {'chord': name, 'root_pc': root1, 'sfx': sfx,
-                'bass_pc': bass_pc, 'alts': [], 'conf': 0.3}
+                'bass_pc': bass_pc, 'alts': [], 'conf': 0.3, 'ev': ev_used}
     for c in cands:
         if c['root'] == root1:
             c['score'] += 1.0
@@ -269,11 +308,14 @@ def _label_segment(seg, chroma, energy, bass, note_names, viterbi_margin,
         if c['sfx'] in EXOTIC_SFX:
             c['score'] -= EXOTIC_PENALTY
         # evidence-strength rescoring: mean med over the candidate's template
-        # tones + the root tone's own strength
+        # tones + the root tone's own strength − mass it leaves unexplained
         tones = [(c['root'] + iv) % 12
                  for iv in _TMPL_BY_SFX.get(c['sfx'], (0, 4, 7))]
+        uncov = [p for p in pcs
+                 if p not in tones and p != bass_pc and p != ev_bass]
         c['score'] += EVIDENCE_W * float(np.mean([med[t] for t in tones])) \
-            + ROOT_EV_W * float(med[c['root']])
+            + ROOT_EV_W * float(med[c['root']]) \
+            - UNCOV_W * float(sum(med[p] for p in uncov))
     cands.sort(key=lambda c: -c['score'])
 
     top = cands[0]
@@ -298,22 +340,29 @@ def _label_segment(seg, chroma, energy, bass, note_names, viterbi_margin,
         if c['name'] != top['name'] and c['name'] not in alt_names:
             alt_names.append(c['name'])
     return {'chord': top['name'], 'root_pc': top['root'], 'sfx': top['sfx'],
-            'bass_pc': bass_pc, 'alts': alt_names, 'conf': round(conf, 3)}
+            'bass_pc': bass_pc, 'alts': alt_names, 'conf': round(conf, 3),
+            'ev': ev_used}
 
 
 def recognize(chroma_data: dict, bass: dict, grid: dict, key: dict,
               note_names: list[str], out_json: Path,
-              piano_notes: list | None = None) -> dict:
+              piano_notes: list | None = None,
+              synth_notes: list | None = None) -> dict:
     chroma = chroma_data['chroma']
     energy = chroma_data['energy']
     bounds = grid['bounds']
     kinds = grid['kind']
     beat_pos = grid['beat_pos']
 
-    piano_w = None
+    ev_sources = []
+    if piano_notes:
+        ev_sources.append(('piano', sorted(piano_notes, key=lambda n: n['start']),
+                           PIANO_MIN_COVER, PIANO_BLEND_W))
+    if synth_notes:
+        ev_sources.append(('synth', sorted(synth_notes, key=lambda n: n['start']),
+                           SYNTH_MIN_COVER, SYNTH_BLEND_W))
     cost_mult = None
     if piano_notes:
-        piano_w = _piano_pc_weights(piano_notes, bounds)
         onsets = _piano_chord_onsets(piano_notes)
         if onsets:
             cost_mult = np.ones(len(bounds) - 1)
@@ -326,6 +375,22 @@ def recognize(chroma_data: dict, bass: dict, grid: dict, key: dict,
     path = _viterbi(emis, kinds, cost_mult)
     segs = _merge_segments(path, bounds, beat_pos)
 
+    if SPLIT_AT_ONSETS and cost_mult is not None:
+        cut_frames = np.where(cost_mult < 1.0)[0]
+        split = []
+        for seg in segs:
+            cuts = [int(f) for f in cut_frames if seg['f0'] < f < seg['f1']]
+            edges = [seg['f0']]
+            for c in cuts:
+                if (beat_pos[c] - beat_pos[edges[-1]] >= MIN_PIECE_BEATS
+                        and beat_pos[min(seg['f1'], len(beat_pos) - 1)]
+                        - beat_pos[c] >= MIN_PIECE_BEATS):
+                    edges.append(c)
+            edges.append(seg['f1'])
+            for a, b in zip(edges[:-1], edges[1:]):
+                split.append({'state': seg['state'], 'f0': a, 'f1': b})
+        segs = split
+
     # per-frame emission margin of the chosen state vs the best other state
     margins = np.zeros(len(path))
     for f in range(len(path)):
@@ -337,8 +402,7 @@ def recognize(chroma_data: dict, bass: dict, grid: dict, key: dict,
     raw_frames = chroma_data.get('frames')
     frame_times = chroma_data.get('frame_times')
 
-    segments = []
-    for seg in segs:
+    def label_at(seg):
         t0 = float(bounds[seg['f0']])
         t1 = float(bounds[min(seg['f1'], len(bounds) - 1)])
         vm = float(margins[seg['f0']:seg['f1']].mean())
@@ -348,13 +412,22 @@ def recognize(chroma_data: dict, bass: dict, grid: dict, key: dict,
             b = int(np.searchsorted(frame_times, t1))
             raw = (raw_frames, a, b)
         lab = _label_segment(seg, chroma, energy, bass, note_names, vm, raw,
-                             piano_w=piano_w, seg_dur=t1 - t0)
+                             ev_sources=ev_sources, seg_t=(t0, t1))
+        return t0, t1, lab
+
+    segments = []
+    for seg in segs:
+        t0, t1, lab = label_at(seg)
         if lab is None:
             segments.append({'start': round(t0, 4), 'end': round(t1, 4),
                              'chord': 'N', 'alts': [], 'conf': 1.0,
                              'root_pc': None, 'sfx': '', 'bass_pc': None})
         else:
             segments.append({'start': round(t0, 4), 'end': round(t1, 4), **lab})
+
+    # (relabel-merge of adjacent segments was tried and REJECTED: the union
+    #  label nearly always matches one side, so merging cascades to a single
+    #  segment — see RESEARCH.md 2026-07-31)
 
     # merge consecutive identical chord names (ChordHUD import behavior)
     merged = []
