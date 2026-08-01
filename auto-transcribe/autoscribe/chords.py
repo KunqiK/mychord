@@ -118,6 +118,21 @@ BLEED_FACTOR = 1.0                  # sustained-in notes count fully (penalizing
 SPLIT_AT_ONSETS = False             # cutting segments at piano onsets measured WORSE on root
                                     # (short pieces lose context) despite +compat/+boundary-F;
                                     # kept as an experiment switch
+# ── BTC posterior second opinion (official large_voca + our fine-tune) ──
+# The transformer sees the full CQT context, so its root belief survives a
+# masked root fundamental — evidence from OUTSIDE the pc-set ceiling.
+BTC_ROOT_W = 2.5                    # weight on the max-normed root marginal
+BTC_QUAL_W = 1.0                    # weight on the exact (root, quality) posterior
+BTC_FT_MIX = 0.5                    # fine-tuned model's share when both ckpts exist
+# our 22 template suffixes -> large_voca quality index (14 per root block:
+# ['min','maj','dim','aug','min6','maj6','min7','minmaj7','maj7','7','dim7',
+#  'hdim7','sus2','sus4']); extensions fold onto their tetrad/triad parent
+SFX_TO_VOCA = {
+    '': 1, 'm': 0, 'dim': 2, 'aug': 3, 'm6': 4, '6': 5, 'm7': 6, 'mMaj7': 7,
+    'maj7': 8, '7': 9, 'dim7': 10, 'm7b5': 11, 'sus2': 12, 'sus4': 13,
+    'maj9': 8, 'm9': 6, '9': 9, '7b9': 9, '7#9': 9, '7sus4': 13,
+    'augMaj7': 3, 'add9': 1,
+}
 MIN_PIECE_BEATS = 1.5               # do not create pieces shorter than this
 
 
@@ -236,7 +251,7 @@ def _merge_segments(path: np.ndarray, bounds: np.ndarray,
 
 
 def _label_segment(seg, chroma, energy, bass, note_names, viterbi_margin,
-                   raw=None, ev_sources=None, seg_t=None):
+                   raw=None, ev_sources=None, seg_t=None, btc_p=None):
     f0, f1 = seg['f0'], seg['f1']
     med = np.median(chroma[:, f0:f1], axis=1)
     m = med.max() or 1.0
@@ -330,6 +345,12 @@ def _label_segment(seg, chroma, energy, bass, note_names, viterbi_margin,
             name += '/' + note_names[bass_pc]
         return {'chord': name, 'root_pc': root1, 'sfx': sfx,
                 'bass_pc': bass_pc, 'alts': [], 'conf': 0.3, 'ev': ev_used}
+    btc_root = btc_qmax = None
+    if btc_p is not None:
+        chord_p = btc_p[:168].reshape(12, 14)
+        marg = chord_p.sum(axis=1)
+        btc_root = marg / (marg.max() or 1.0)
+        btc_qmax = float(chord_p.max()) or 1.0
     for c in cands:
         if c['root'] == root1:
             c['score'] += 1.0
@@ -347,6 +368,12 @@ def _label_segment(seg, chroma, energy, bass, note_names, viterbi_margin,
         c['score'] += EVIDENCE_W * float(np.mean([med[t] for t in tones])) \
             + ROOT_EV_W * float(med[c['root']]) \
             - UNCOV_W * float(sum(med[p] for p in uncov))
+        if btc_root is not None:
+            c['score'] += BTC_ROOT_W * float(btc_root[c['root']])
+            vq = SFX_TO_VOCA.get(c['sfx'])
+            if vq is not None:
+                c['score'] += BTC_QUAL_W * \
+                    float(btc_p[c['root'] * 14 + vq]) / btc_qmax
     cands.sort(key=lambda c: -c['score'])
 
     top = cands[0]
@@ -378,7 +405,8 @@ def _label_segment(seg, chroma, energy, bass, note_names, viterbi_margin,
 def recognize(chroma_data: dict, bass: dict, grid: dict, key: dict,
               note_names: list[str], out_json: Path,
               piano_notes: list | None = None,
-              synth_notes: list | None = None) -> dict:
+              synth_notes: list | None = None,
+              btc: dict | None = None) -> dict:
     chroma = chroma_data['chroma']
     energy = chroma_data['energy']
     bounds = grid['bounds']
@@ -433,6 +461,17 @@ def recognize(chroma_data: dict, bass: dict, grid: dict, key: dict,
     raw_frames = chroma_data.get('frames')
     frame_times = chroma_data.get('frame_times')
 
+    btc_times = btc_probs = None
+    if btc is not None:
+        # blend the two checkpoints' posteriors; either may be absent
+        parts = [(1.0 - BTC_FT_MIX, btc.get('probs_off')),
+                 (BTC_FT_MIX, btc.get('probs_ft'))]
+        avail = [(w, p) for w, p in parts if p is not None]
+        if avail:
+            wsum = sum(w for w, _ in avail) or 1.0
+            btc_probs = sum(w * p for w, p in avail) / wsum
+            btc_times = btc['times']
+
     def label_at(seg):
         t0 = float(bounds[seg['f0']])
         t1 = float(bounds[min(seg['f1'], len(bounds) - 1)])
@@ -442,8 +481,15 @@ def recognize(chroma_data: dict, bass: dict, grid: dict, key: dict,
             a = int(np.searchsorted(frame_times, t0))
             b = int(np.searchsorted(frame_times, t1))
             raw = (raw_frames, a, b)
+        btc_p = None
+        if btc_probs is not None:
+            a = int(np.searchsorted(btc_times, t0))
+            b = int(np.searchsorted(btc_times, t1))
+            if b > a:
+                btc_p = btc_probs[a:b].mean(axis=0)
         lab = _label_segment(seg, chroma, energy, bass, note_names, vm, raw,
-                             ev_sources=ev_sources, seg_t=(t0, t1))
+                             ev_sources=ev_sources, seg_t=(t0, t1),
+                             btc_p=btc_p)
         return t0, t1, lab
 
     segments = []

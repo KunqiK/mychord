@@ -21,6 +21,7 @@ DOWNSTREAM = {
     'chroma':   ['key', 'chords'],
     'bass':     ['chords'],
     'key':      ['chords'],
+    'btc':      ['chords'],   # BTC posterior feeds chord candidate rescoring
     'chords':   [],
     'melody':   [],
     'piano':    ['chords'],   # piano notes feed chord labeling when the stem exists

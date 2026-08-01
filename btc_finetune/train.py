@@ -51,6 +51,12 @@ TRAIN_STRIDE = 54          # 50% overlapping windows for training
 VAL_STRIDE = 108           # non-overlapping for validation
 SEED = 1337
 NUM_THREADS = 8
+# pitch-shift augmentation (BTC-paper standard, -5..+6 semitones): the CQT has
+# 24 bins/octave = 2 bins/semitone, so a semitone shift is a pure bin roll —
+# no audio re-rendering. Train-time only; validation stays unaugmented so val
+# curves compare across runs. Labels move with the roll (root_pc + k mod 12).
+AUG_SEMIS = np.arange(-5, 7)
+BINS_PER_SEMI = 2
 
 # fixed 6-song validation set. Chosen standalone: none of these has a
 # near-duplicate/variant in the training set (dup groups kept in train:
@@ -93,13 +99,28 @@ def load_windows(bases: list[str], stride: int, mean: float, std: float):
     return songs, windows
 
 
-def batch_of(songs, windows, idxs):
+def batch_of(songs, windows, idxs, aug_rng=None, pad_val=0.0):
     xs, ys = [], []
     for i in idxs:
         si, s = windows[i]
         f, l = songs[si]
-        xs.append(f[s:s + TIMESTEP])
-        ys.append(l[s:s + TIMESTEP])
+        x = f[s:s + TIMESTEP]
+        y = l[s:s + TIMESTEP]
+        if aug_rng is not None:
+            k = int(AUG_SEMIS[aug_rng.integers(len(AUG_SEMIS))])
+            if k:
+                b = k * BINS_PER_SEMI
+                x2 = torch.full_like(x, pad_val)
+                if b > 0:                     # pitch up: content moves to higher bins
+                    x2[:, b:] = x[:, :-b]
+                else:                         # pitch down
+                    x2[:, :b] = x[:, -b:]
+                x = x2
+                chord = (y >= 0) & (y < 168)  # 168 X / 169 N / -1 unlabeled stay put
+                y = torch.where(
+                    chord, ((y // 14 + k) % 12) * 14 + y % 14, y)
+        xs.append(x)
+        ys.append(y)
     return torch.stack(xs), torch.cat(ys)
 
 
@@ -168,7 +189,11 @@ def main() -> None:
         log(f'EPOCH 0/{MAX_EPOCH} (pretrained baseline) '
             f'val_loss {v_loss:.4f} val_acc {v_acc:.4f}')
 
+    # silence floor after per-song normalization — what a padded CQT bin
+    # (rolled in from beyond the spectrum) should look like
+    pad_val = float((np.log(1e-6) - mean) / std)
     rng = np.random.default_rng(SEED + start_epoch)
+    aug_rng = np.random.default_rng(SEED * 2 + start_epoch)
     for epoch in range(start_epoch, MAX_EPOCH + 1):
         t0 = time.time()
         order = rng.permutation(len(tr_windows))
@@ -177,7 +202,7 @@ def main() -> None:
         steps = (len(order) + BATCH - 1) // BATCH
         for bi in range(steps):
             idxs = order[bi * BATCH:(bi + 1) * BATCH]
-            x, y = batch_of(tr_songs, tr_windows, idxs)
+            x, y = batch_of(tr_songs, tr_windows, idxs, aug_rng, pad_val)
             optimizer.zero_grad()
             _, loss, _, _ = model(x, y)
             loss.backward()

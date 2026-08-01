@@ -290,16 +290,36 @@ def main(argv=None) -> int:
         if piano_data and piano_data['notes'] and piano_stem_id == 'piano' \
         else None
     synth_evidence = melody.get('synth_poly') if melody else None
+
+    # BTC posterior second opinion (official large_voca + fine-tuned best.pt).
+    # Soft-fails: any error just drops the evidence and the pipeline proceeds.
+    from . import btc_score
+    btc_data = None
+    btc_stamp = btc_score.weights_stamp()
+    if btc_stamp:
+        btc_npz = sc.path('btc.npz')
+        try:
+            sc.run_stage('btc', {'w': btc_stamp, 'v': 1}, [btc_npz],
+                         lambda: btc_score.compute(input_wav, btc_npz))
+            btc_data = btc_score.load(btc_npz)
+        except Exception as e:                                    # noqa: BLE001
+            print(f'    btc scorer unavailable ({e!r}) — chords run without it')
+    if btc_data:
+        models = [t for t in ('off', 'ft') if btc_data.get(f'probs_{t}') is not None]
+        print(f"    btc: {len(btc_data['times'])} frames x {'+'.join(models)}")
+
     chords_json = sc.path('chords.json')
     sc.run_stage('chords', {'key': key['active_key'], 'voc_w': voc_w,
                             'harm': [f'{p.parent.name}/{p.name}' for p in harm_wavs],
                             'pev': bool(piano_evidence),
-                            'sev': bool(synth_evidence), 'v': 5},
+                            'sev': bool(synth_evidence),
+                            'btc': btc_stamp if btc_data else None, 'v': 6},
                  [chords_json],
                  lambda: chords_mod.recognize(chroma_data, bass, grid, key,
                                               note_names, chords_json,
                                               piano_notes=piano_evidence,
-                                              synth_notes=synth_evidence))
+                                              synth_notes=synth_evidence,
+                                              btc=btc_data))
     segments = chords_mod.load(chords_json)['segments']
     n_chords = len([s for s in segments if s['chord'] != 'N'])
     print(f'    {n_chords} chord segments')

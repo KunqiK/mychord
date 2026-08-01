@@ -1,5 +1,18 @@
 # RESEARCH — 从开源项目吸收的技术笔记
 
+## 全自动化「假设→验证」闭环: 大调查 + 阶段0 落地 (2026-08-01)
+
+背景: user 问"人类扒谱四步 (①调性先验 ②进行套路 ③功能推根音 ④弹奏对比验证) 能否全自动化"。6-agent workflow 调查 (1 代码勘察 + 4 网络 + 1 汇总), 完整方案清单 12 项见 plan 文件; 排名前列: BTC 双权重打分 > NNLS 谐波拟合残差 (Mauch ISMIR2010, MIREX 74→80%) > 段级 lattice 二次 Viterbi > 移调增强 > Chordonomicon 进行先验 > Claude 符号裁决 (仅裁分歧段; 先例 arXiv 2509.18700 在 80% 基线 +1~2.77%) > HookTheory 22k 段数据集 (绝对上限最大, user 已授权 yt-dlp 子集下载)。
+
+**已调查排除 (勿重做)**: 本地 7B LLM 裁决 (MusicTheoryBench 7B≈随机, 且 20-40min/首); 音频域重合成 log-mel/MFCC 对比 (Simonetta 2022 反证, NNLS 是此思路在 chroma 域的正确实现); madmom (MSVC 编译+CC-NC 模型, 价值被本地 BTC 官方权重覆盖); crema/essentia/autochord/omnizart Windows 不可行; RNBert (fairseq Win 深坑+古典→电子双域移); Harmonix Set 无和弦标注; ChordFormer/MIREX24-25 新系统无代码; Sethares roughness 无 ACE 背书 (可半天小实验)。
+
+**阶段0 落地 (同日): BTC 双权重后验打分器 — 首个天花板外证据源**
+- 发现: 官方 large_voca 预训练权重一直就在本地 `btc\test\btc_model_large_voca.pt` (12MB, 471 首训练, in-domain root 83.5%); 我们的微调本来就从它初始化 (train.log "FRESH start from pretrained")
+- 实现: `autoscribe/btc_score.py` (双 ckpt 各出 170 类逐帧 posterior → btc.npz 缓存, 特征照抄 prep_features 含分块帧钟 times); chords.py `_label_segment` 候选重打分加 `BTC_ROOT_W 2.5 ×根音边际 + BTC_QUAL_W 1.0 ×精确后验` (SFX_TO_VOCA 22→14 质性映射); cli.py 新增 btc 缓存阶段 (软失败降级), cache.py DOWNSTREAM `btc→chords`; 权重 mtime 进 params → 重训后自动失效
+- **成绩 (34 首 batch_eval 同集对照): root 平均 37.2→39.6% (+2.4pp), 中位 37.2→42.1% (+4.9pp), 兼容 43.5→44.5%**; 32 首实际重跑中 23 涨/5 平/4 微跌 (最大 −1.8); selftest 16/16 不变; 代价每首 +3~10s CPU
+- 移调增强 ×12 (CQT 24bins/oct → 半音=2bin 纯矩阵 roll, 训练时随机 -5..+6, 验证集不增强, -1/N 标签不动) 写进 train.py 并单元验证; run 2 从官方权重重训中 (epoch 0 基线 24.30% 与 run 1 一致)
+- 下一步 (阶段1): NNLS 残差分 → lattice 二次 Viterbi → Chordonomicon 先验; run 2 出 best_v2 后换权重重测 34 首
+
 ## 首次 BTC 微调 (2026-08-01 凌晨, 40 首数据集)
 
 - 数据: `MIDIandMUSIC\dataset\` 38 首 × 0.25s 帧标签 (99 分钟), 8 质性×12根音映射进 large_voca; 验证集 6 首固定 (近重复对不跨界)

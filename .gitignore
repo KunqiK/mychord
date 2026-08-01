@@ -8,3 +8,9 @@ image.png
 Music-Source-Separation-Training-GUI/
 MIDIandMUSIC/audio/
 omr/venv/
+
+# Fine-tune artifacts (models/features are rebuildable; keep code + split only)
+btc_finetune/*.pt
+btc_finetune/features/
+MIDIandMUSIC/dataset/
+__pycache__/
