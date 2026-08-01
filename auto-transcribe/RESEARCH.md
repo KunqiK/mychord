@@ -113,6 +113,41 @@ NeuralNote 不替代管线,做**难段补扒**:把 `cache\<歌>\stems\vocals.wav
 7. ~~contour 矩阵多声线分离~~ — 已证伪(表示层瓶颈,见上表)
 8. 跟踪: pymss-studio 出正式版、Banquet CPU 试跑、AMT-2025 冠军 MIROS 放权重、deton24 文档新模型
 
+## 和弦攻坚第三轮: 钢琴证据 + 图表口径修正 (2026-07-31 晚, user: "和弦仍然大错特错, 最在意和弦正确")
+
+**新评测器 `eval_chords_ref.py`** — 直接对 `gt\correct chord.mid` 打分 (这才是用户耳中的"对")。
+
+### 三个被推翻的旧认知
+
+1. **"0.89s 换弦"是错的图表读法**: correct chord.mid 里 ≥3 音的完整 voicing 才是和弦事件 (99 个, **真实和声节奏 1.82s/换弦**), 单音/双音是华彩填充。旧读法把填充当换弦, 导致 CHANGE_COST 被调低到 3.5 → 2.4 倍过分段。已改回 8.0 + MIN_SEG_BEATS 2.0
+2. **"root-on-bass 加分"方向反了**: 用户的 root 只有 38% 在最低音上 — 贝斯通常是踏板音 (Fm7/Bb), 大加分产生 Bbm9 之类的错根读法。STAGE2_BASS_ROOT_BONUS 1.5→0.5
+3. **分离 stem 做 chroma 不可行** (实测): 钢琴/synth 轨在弱段被 max 归一化放大残留噪声成假音级 (44.6s 处 C#maj9 的 chroma 全是 Bb/A 垃圾)。chroma 保持 other 轨; **钢琴轨改在标注层进入** ↓
+
+### 有效的新架构: 钢琴音符符号证据
+
+- `--stems 6` 跑过的歌自动启用: ByteDance 引擎转录 SW 钢琴轨 (1430 音符, 对 chart 音级精确/召回 ~76%) → chords 阶段 (a) **分段内音级权重 = 时长×力度** 代替 chroma 中位数 (钢琴真在弹时), (b) **钢琴 voicing onset 处换弦代价 ×0.5** (行为学: 用户就是照 comping 乐器扒的)
+- **候选证据强度重打分** (EVIDENCE_W 6.0 / ROOT_EV_W 3.0): 旧打分只看音级在不在, 弱 bleed 音级能撑起错误候选; 新打分按模板音实际强度均值+根音强度, 杀掉"Bb 弱证据当根音"类错误
+- piano→chords 依赖已进 cache.DOWNSTREAM; pev/harm 进 params
+
+### 结果 (vs correct chart, 全部同日拿到)
+
+| 指标 | 改前 | 改后 |
+|---|---|---|
+| root 正确率 | 21.2% | **34.1%** |
+| 和声兼容 (音级) | 67.2% | **77.5%** |
+| root 在 top1+备选 | 45.3% | **66.6%** |
+| 换弦边界 F1 | 0.34 | **0.43** |
+| 段数 (真值 99) | 238 | **159** |
+
+vs GT 全和声轨 (evaluate_gt): compat 72.8%, root 31.3% — 同向。selftest 始终 16/16。
+
+### 残余错误的本质 (下轮方向)
+
+- **相对读法歧义**: pad 真的在响 Db 上层结构时, Dbmaj9 (我们) vs Fm7/Ab (用户按钢琴) 都是音响事实 — 需要"comping 乐器优先"更彻底 (钢琴证据目前只在 voicing 覆盖 ≥35% 的段生效, drop 段钢琴被埋)
+- drop 段 (41-74s) 钢琴 stem 分离失败 ({Ab,Eb} 只剩两音) → 证据缺失, 只能靠 Viterbi 惯性
+- exact sfx 仍低 (~8%): maj9/add9/m9 等扩展命名约定 — 用户说过内容对就行, 不追
+- 边界召回 57%: 部分真换弦被 CC 8.0 吸收 — 可试 onset 折扣更激进 (0.3) 或 madmom 式学习型转移
+
 ## 用户 correct 参照驱动的第二轮 (2026-07-30 晚)
 
 用户提供 `correct chord.mid`(=编曲里的钢琴和弦声部, 202 个和弦事件, **平均 0.89s 换弦**)和 `correct vocal melody.mid`(154 音符, 51-68)并判"扒得很错"。诊断:

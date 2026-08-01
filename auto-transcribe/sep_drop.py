@@ -16,23 +16,24 @@ def main() -> int:
     if len(sys.argv) < 2:
         print()
         print('  用法: 把歌曲文件 (flac / mp3 / wav) 拖到「拆乐器」图标上。')
-        print('  默认拆成 6 轨: 人声 / 鼓 / 贝斯 / 吉他 / 钢琴 / 其他。')
+        print('  拆成: 人声 / 鼓 / 贝斯 / 吉他 / 钢琴 / 木吉他 / 弦乐 / 木管。')
         print()
-        print('  想要更多乐器 (synth / 弦乐 / 电吉他 / 木吉他 / 管风琴 / 萨克斯…),')
-        print('  让 Claude 帮你跑, 例如: transcribe.cmd "歌" --stems synth,strings --stems-only')
+        print('  还想要别的乐器 (synth / 电吉他 / 管风琴 / 萨克斯 / 小提琴 / 铜管…共53种),')
+        print('  让 Claude 帮你跑, 例如: transcribe.cmd "歌" --stems synth,organ --stems-only')
         print()
         return 0
 
     song = Path(sys.argv[1])
     print()
     print(f'  正在拆乐器: {song.name}')
-    print('  用的是 MVSEP 排行榜第一的 BS-Roformer-SW 模型 (钢琴/吉他分离超过 LALAL.AI)。')
-    print('  注意: 这个模型比普通四轨分离重得多, 纯 CPU 可能要跑十几到几十分钟,')
-    print('  跑完会缓存, 同一首歌第二次是秒开。先去干点别的吧 ~')
+    print('  人声/鼓/贝斯/吉他/钢琴 用 MVSEP 排行榜第一的模型 (超 LALAL.AI),')
+    print('  木吉他/弦乐/木管 用 MVSep Mega-53 单乐器模型。')
+    print('  注意: 纯 CPU 第一次要跑 1~2 小时 (4 个 AI 模型轮流过一遍),')
+    print('  跑完永久缓存, 同一首歌第二次秒开。先去干别的吧 ~')
     print()
 
     from autoscribe.cli import main as run
-    rc = run([str(song), '--stems', '6', '--stems-only'])
+    rc = run([str(song), '--stems', '6,aguitar,strings,woodwind', '--stems-only'])
     if rc != 0:
         print()
         print('  出错了 —— 请把上面的错误信息发给 Claude')
@@ -44,7 +45,7 @@ def main() -> int:
         os.startfile(str(out / 'stems'))  # noqa: S606
     print()
     print('  完成! stems 文件夹已打开:')
-    print('    vocals.flac  drums.flac  bass.flac  guitar.flac  piano.flac  other.flac')
+    print('    vocals / drums / bass / guitar / piano / acoustic_guitar / strings / woodwind')
     print('  直接拖进 FL Studio / NeuralNote 用。')
     print()
     return 0

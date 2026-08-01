@@ -197,13 +197,23 @@ def main(argv=None) -> int:
 
     # vocals hurt harmony chroma on tested material (pitched chops); opt-in only
     voc_w = args.chroma_vocals if args.chroma_vocals is not None else 0.0
+    # NOTE (measured vs the correct-chord chart): stem-based chroma does NOT
+    # beat the demucs other stem — the roformer piano/synth stems go quiet in
+    # busy sections and max-normalization inflates residual noise into fake
+    # pitch classes. Chroma stays other-based; the piano stem enters at the
+    # LABELING level instead, as note-level evidence (see chords stage).
+    ext_dir = sc.path('stems_ext')
+    harm_wavs: list = []
     chroma_npz = sc.path('chroma.npz')
-    sc.run_stage('chroma', {'voc_w': voc_w, 'beats': beat_params, 'v': 2},
+    sc.run_stage('chroma', {'voc_w': voc_w, 'beats': beat_params,
+                            'harm': [f'{p.parent.name}/{p.name}' for p in harm_wavs],
+                            'v': 2},
                  [chroma_npz],
                  lambda: chroma_mod.compute(
                      stems_dir / 'other.wav', stems_dir / 'vocals.wav',
                      grid['bounds'], chroma_npz, vocals_weight=voc_w,
-                     bass_wav=stems_dir / 'bass.wav'))
+                     bass_wav=stems_dir / 'bass.wav',
+                     harm_wavs=harm_wavs or None))
     chroma_data = chroma_mod.load(chroma_npz)
 
     bass_json = sc.path('bass.json')
@@ -223,11 +233,40 @@ def main(argv=None) -> int:
     from .hud_port import key_spelling
     _, _, _, note_names = key_spelling(key['tonic_pc'], key['mode'])
 
+    # piano stage runs BEFORE chords when a dedicated piano stem exists (from
+    # --stems 6): its note-level voicings are the primary chord evidence —
+    # the reference chart that defines "correct" is the comping instrument.
+    # --piano-stem 'input' auto-upgrades to the dedicated stem when available.
+    piano_data = None
+    piano_flac = ext_dir / 'sw6' / 'piano.flac'
+    piano_stem_id = args.piano_stem
+    if piano_stem_id == 'input' and piano_flac.exists():
+        piano_stem_id = 'piano'
+    if piano_stem_id == 'piano' and not piano_flac.exists():
+        print('    --piano-stem piano 需要先跑 --stems 6 (无缓存的钢琴轨)')
+        return 2
+    if args.piano or piano_stem_id == 'piano':
+        from . import piano as piano_mod
+        piano_json = sc.path('piano.json')
+        piano_src = {'piano': piano_flac, 'other': stems_dir / 'other.wav',
+                     'input': input_wav}[piano_stem_id]
+        sc.run_stage('piano', {'stem': piano_stem_id, 'v': 1}, [piano_json],
+                     lambda: piano_mod.transcribe(piano_src, piano_json))
+        piano_data = piano_mod.load(piano_json)
+        print(f"    piano: {len(piano_data['notes'])} notes, "
+              f"{piano_data['n_pedal']} pedal events ({piano_stem_id} stem)")
+
+    piano_evidence = piano_data['notes'] \
+        if piano_data and piano_data['notes'] and piano_stem_id == 'piano' \
+        else None
     chords_json = sc.path('chords.json')
-    sc.run_stage('chords', {'key': key['active_key'], 'voc_w': voc_w, 'v': 2},
+    sc.run_stage('chords', {'key': key['active_key'], 'voc_w': voc_w,
+                            'harm': [f'{p.parent.name}/{p.name}' for p in harm_wavs],
+                            'pev': bool(piano_evidence), 'v': 3},
                  [chords_json],
                  lambda: chords_mod.recognize(chroma_data, bass, grid, key,
-                                              note_names, chords_json))
+                                              note_names, chords_json,
+                                              piano_notes=piano_evidence))
     segments = chords_mod.load(chords_json)['segments']
     n_chords = len([s for s in segments if s['chord'] != 'N'])
     print(f'    {n_chords} chord segments')
@@ -259,24 +298,6 @@ def main(argv=None) -> int:
         print(f"    melody: {melody['source']}/{melody['engine']} "
               f"{len(melody['notes'])} notes"
               + (f" + poly {len(melody.get('poly', []))}" if melody.get('poly') else ''))
-
-    piano_data = None
-    if args.piano:
-        from . import piano as piano_mod
-        piano_json = sc.path('piano.json')
-        if args.piano_stem == 'piano':
-            piano_src = sc.path('stems_ext') / 'sw6' / 'piano.flac'
-            if not piano_src.exists():
-                print('    --piano-stem piano 需要先跑 --stems 6 (无缓存的钢琴轨)')
-                return 2
-        else:
-            piano_src = input_wav if args.piano_stem == 'input' \
-                else stems_dir / 'other.wav'
-        sc.run_stage('piano', {'stem': args.piano_stem, 'v': 1}, [piano_json],
-                     lambda: piano_mod.transcribe(piano_src, piano_json))
-        piano_data = piano_mod.load(piano_json)
-        print(f"    piano: {len(piano_data['notes'])} notes, "
-              f"{piano_data['n_pedal']} pedal events")
 
     # ── outputs (always regenerated) ──
     print('  [outputs]')

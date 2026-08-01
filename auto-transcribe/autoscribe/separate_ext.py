@@ -45,16 +45,16 @@ def _mega(stem: str) -> dict:
             f'mega53_{stem}.yaml': f'{_HF_MEGA}bs_mega_53stem_{stem}_mvsep_config.yaml',
         },
         'stems': {stem: stem.replace('-', '_')},
-        'complement': True,
         'desc': f'MVSep Mega-53 "{stem}" 单乐器 (draft 级, ZFTurbo 官方权重)',
     }
 
 
-# key → spec. 'stems': {msst_output_name: export_name}. 'complement': also
-# write minus_<export_name> = mix - stem (only meaningful for single-target
-# models). Any Mega-53 stem name (53 total: organ, saxophone, violin, brass,
-# kick, snare, …) works via _mega() — REGISTRY lists the requested presets,
-# unknown keys fall back to _mega(key) so e.g. --stems organ just works.
+# key → spec. 'stems': {msst_output_name: export_name}. Any Mega-53 stem name
+# (53 total: organ, saxophone, violin, brass, kick, snare, …) works via
+# _mega() — REGISTRY lists the requested presets, unknown keys fall back to
+# _mega(key) so e.g. --stems organ just works. Per user: no complement
+# ("minus") outputs, and sw6's residual 'other' stays cache-only (see
+# NO_EXPORT) — the user wants one clean file per real instrument.
 REGISTRY: dict[str, dict] = {
     'sw6': {
         'model_type': 'bs_roformer',
@@ -68,11 +68,11 @@ REGISTRY: dict[str, dict] = {
         },
         'stems': {s: s for s in
                   ('vocals', 'drums', 'bass', 'guitar', 'piano', 'other')},
-        'complement': False,
         'desc': 'BS-Roformer-SW 6 轨 (MVSEP 排行钢琴/吉他双第一, 超 LALAL.AI)',
     },
     'synth': _mega('synth'),
     'strings': _mega('strings'),
+    'woodwind': _mega('woodwind'),
     'eguitar': _mega('electric-guitar'),
     'aguitar': _mega('acoustic-guitar'),
     'guitar': {
@@ -86,7 +86,6 @@ REGISTRY: dict[str, dict] = {
                 'https://huggingface.co/becruily/mel-band-roformer-guitar/resolve/main/config_guitar_becruily.yaml',
         },
         'stems': {'Guitar': 'guitar'},
-        'complement': True,
         'desc': 'becruily 吉他 MelBand-Roformer (45MB, 最快)',
     },
     'leadsynth': {
@@ -100,10 +99,13 @@ REGISTRY: dict[str, dict] = {
                 'https://huggingface.co/oulianov/bsroformer-lead-synth/resolve/main/config_bs_roformer_synth_lead.yaml',
         },
         'stems': {'synth lead': 'lead_synth'},
-        'complement': True,
         'desc': '社区 lead-synth 分离 (SDR 4.99, 草稿级实验模型)',
     },
 }
+
+# stems kept in cache (pipeline may use them) but never copied to the
+# user-facing output stems folder
+NO_EXPORT = {'other', 'minus'}
 
 # aliases accepted on the CLI
 ALIASES = {'6': 'sw6', 'piano': 'sw6', 'all': 'sw6'}
@@ -131,9 +133,6 @@ def expected_outputs(ext_dir: Path, keys: list[str]) -> list[Path]:
         spec = spec_for(k)
         for export in spec['stems'].values():
             outs.append(ext_dir / k / f'{export}.flac')
-        if spec['complement']:
-            for export in spec['stems'].values():
-                outs.append(ext_dir / k / f'minus_{export}.flac')
     return outs
 
 
@@ -230,7 +229,6 @@ def run_model(input_wav: Path, ext_dir: Path, key: str, log=print) -> None:
         raise RuntimeError(f'MSST inference failed for {key}:\n{tail}')
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    mix = None
     for msst_name, export in spec['stems'].items():
         src = None
         for ext in ('wav', 'flac'):
@@ -245,12 +243,6 @@ def run_model(input_wav: Path, ext_dir: Path, key: str, log=print) -> None:
                 f'(got {produced})')
         data, sr = _read_audio(src)
         _write_flac(out_dir / f'{export}.flac', data, sr)
-        if spec['complement']:
-            if mix is None:
-                mix, mix_sr = _read_audio(input_wav)
-            n = min(len(mix), len(data))
-            comp = mix[:n] - data[:n]
-            _write_flac(out_dir / f'minus_{export}.flac', comp, sr)
     shutil.rmtree(raw_dir, ignore_errors=True)
 
 
@@ -267,13 +259,16 @@ def separate_ext(input_wav: Path, ext_dir: Path, keys: list[str],
 
 def export_stems(ext_dir: Path, keys: list[str], dest: Path,
                  log=print) -> list[Path]:
-    """Copy produced stems flat into dest, de-colliding names by model key."""
+    """Copy produced stems flat into dest, de-colliding names by model key.
+    Residual/complement files (other, minus_*) stay cache-only."""
     dest.mkdir(parents=True, exist_ok=True)
     taken: dict[str, str] = {}
     copied = []
     for k in keys:
         for p in sorted((ext_dir / k).glob('*.flac')):
             name = p.stem
+            if name in NO_EXPORT or name.split('_')[0] in NO_EXPORT:
+                continue
             if name in taken and taken[name] != k:
                 name = f'{name}_{k}'
             taken[p.stem] = taken.get(p.stem, k)

@@ -23,7 +23,7 @@ DOWNSTREAM = {
     'key':      ['chords'],
     'chords':   [],
     'melody':   [],
-    'piano':    [],
+    'piano':    ['chords'],   # piano notes feed chord labeling when the stem exists
 }
 STAGES = list(DOWNSTREAM.keys())
 

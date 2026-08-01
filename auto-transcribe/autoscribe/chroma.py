@@ -16,10 +16,20 @@ BASS_CHROMA_W = 0.6   # bass-stem low-register chroma folded into the feature
 
 def compute(other_wav: Path, vocals_wav: Path | None, frame_bounds: np.ndarray,
             out_npz: Path, vocals_weight: float = 0.0,
-            bass_wav: Path | None = None) -> dict:
+            bass_wav: Path | None = None,
+            harm_wavs: list[Path] | None = None) -> dict:
     import librosa
 
-    y, sr = load_mono(other_wav)
+    if harm_wavs:
+        # dedicated harmony stems (roformer piano/synth) replace the demucs
+        # other stem: other mixes lead/arp/FX into the same pile and was the
+        # main source of wrong chords vs the user's reference chart
+        ys = [load_mono(w) for w in harm_wavs]
+        sr = ys[0][1]
+        n = min(len(y_) for y_, _ in ys)
+        y = np.sum([y_[:n] for y_, _ in ys], axis=0)
+    else:
+        y, sr = load_mono(other_wav)
     if vocals_weight > 0 and vocals_wav is not None and vocals_wav.exists():
         yv, _ = load_mono(vocals_wav)
         n = min(len(y), len(yv))

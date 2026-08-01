@@ -13,7 +13,9 @@ from pathlib import Path
 
 import numpy as np
 
-from .hud_port import INTERVAL_WEIGHTS, detect_chords
+from .hud_port import CHORD_TEMPLATES, INTERVAL_WEIGHTS, detect_chords
+
+_TMPL_BY_SFX = dict(CHORD_TEMPLATES)
 
 # ── stage-1 vocabulary ──
 CORE_QUALITIES = [
@@ -36,22 +38,39 @@ BASS_ROOT_BONUS = 2.0               # x bass conf, when bass pc == root
 BASS_TONE_BONUS = 0.6               # x bass conf, when bass pc is another chord tone
 BASS_MISS_PENALTY = 0.6             # x bass conf, when bass pc is NOT a chord tone
 EMIT_TEMP = 0.35                    # divide scores by this → log-emission scale
-CHANGE_COST = 3.5                   # base log-cost of switching chords
-# (tuned on the SATELLITE reference: real harmonic rhythm is ~2 beats/chord;
-#  higher costs smear multiple changes into one long wrong segment)
+CHANGE_COST = 8.0                   # base log-cost of switching chords
+# (re-tuned 2026-07-31 on the corrected chart reading: the TRUE harmonic
+#  rhythm is ~1.8s/chord — the earlier 0.89s figure counted piano fills as
+#  changes and led to 2.4x oversegmentation at CHANGE_COST 3.5. Piano voicing
+#  onsets get a discount via cost_mult, so real changes still go through.)
 CHANGE_MULT = {'downbeat': 0.4, 'midbar': 0.7, 'beat': 1.0, 'offbeat': 1.6}
 ENERGY_DAMP_FLOOR = 0.25            # quiet-but-structured frames keep >=sqrt(.25) weight
 N_ENERGY_FLOOR = 0.15               # N needs BOTH low energy (x median) ...
 N_STRUCTURE_FLOOR = 2.0             # ... and flat chroma (1/mean of max-normed chroma)
-MIN_SEG_BEATS = 1.0                 # absorb shorter segments into neighbors
+MIN_SEG_BEATS = 2.0                 # absorb shorter segments into neighbors
 PC_KEEP = 0.4                       # stage-2: keep pcs with chroma >= this
 PC_KEEP_TMPL = 0.25                 # ...or template tones above this
 PC_CAP = 6
 BASS_STABLE_FRAC = 0.5              # modal bass must cover this to be trusted
 BASS_CONF_MIN = 0.35                # ...at at least this mean pyin confidence
-STAGE2_BASS_ROOT_BONUS = 1.5        # stage-2 candidates rooted on the bass pc
+STAGE2_BASS_ROOT_BONUS = 0.5        # stage-2 candidates rooted on the bass pc
+# (was 1.5 — the user's reference chart roots on the bass only 38% of the
+#  time; the bass is usually a pedal under the comping stack, so a big bonus
+#  produced wrong-root readings like Bbm9 for Fm7/Bb)
 EXOTIC_SFX = {'7b9', '7#9', 'mMaj7', 'augMaj7'}   # rarely correct on dirty chroma
 EXOTIC_PENALTY = 0.8                # prior against exotic labels in ties
+EVIDENCE_W = 6.0                    # weight of mean per-tone evidence strength
+ROOT_EV_W = 3.0                     # extra weight on the root tone's evidence
+# (candidates were previously ranked on pc membership alone — a weak bleed pc
+#  like a Bb pedal could anchor a wrong-root reading such as Bbm9 over the
+#  user's Fm7/Bb; scoring by evidence strength keeps the root on strong tones)
+# ── piano-stem note evidence (the user's reference chart IS the comping
+#    instrument: tertian stacking over its voiced pcs is how chords get named) ──
+PIANO_PC_KEEP = 0.25                # keep pcs >= this share of the strongest pc
+PIANO_MIN_PCS = 3                   # need a real voicing, not a fill
+PIANO_MIN_COVER = 0.35              # piano must sound over this share of the segment
+PIANO_ONSET_EPS = 0.05              # chord-onset grouping window (s)
+PIANO_ONSET_DISCOUNT = 0.5          # change-cost multiplier near a piano voicing onset
 
 
 def _emissions(chroma: np.ndarray, energy: np.ndarray, bass: dict) -> np.ndarray:
@@ -86,12 +105,40 @@ def _emissions(chroma: np.ndarray, energy: np.ndarray, bass: dict) -> np.ndarray
     return logits - logits.max(axis=1, keepdims=True)
 
 
-def _viterbi(emis: np.ndarray, kinds: list[str]) -> np.ndarray:
+def _piano_pc_weights(piano_notes, bounds: np.ndarray) -> np.ndarray:
+    """(12, F) duration x velocity mass of piano-stem notes per synced frame."""
+    F = len(bounds) - 1
+    W = np.zeros((12, F))
+    for n in piano_notes:
+        a = int(np.searchsorted(bounds, n['start'], side='right')) - 1
+        b = int(np.searchsorted(bounds, n['end'], side='left'))
+        for f in range(max(a, 0), min(b + 1, F)):
+            ov = min(n['end'], bounds[f + 1]) - max(n['start'], bounds[f])
+            if ov > 0:
+                W[n['midi'] % 12, f] += ov * n.get('amp', 0.5)
+    return W
+
+
+def _piano_chord_onsets(piano_notes) -> list[float]:
+    """Times where the piano lands a real voicing (>=3 distinct pcs at once)."""
+    groups: list[dict] = []
+    for n in sorted(piano_notes, key=lambda x: x['start']):
+        if groups and n['start'] - groups[-1]['t'] <= PIANO_ONSET_EPS:
+            groups[-1]['pcs'].add(n['midi'] % 12)
+        else:
+            groups.append({'t': n['start'], 'pcs': {n['midi'] % 12}})
+    return [g['t'] for g in groups if len(g['pcs']) >= PIANO_MIN_PCS]
+
+
+def _viterbi(emis: np.ndarray, kinds: list[str],
+             cost_mult: np.ndarray | None = None) -> np.ndarray:
     F, S = emis.shape
     dp = emis[0].copy()
     back = np.zeros((F, S), dtype=np.int32)
     for f in range(1, F):
         cost = CHANGE_COST * CHANGE_MULT.get(kinds[f], 1.0)
+        if cost_mult is not None:
+            cost *= cost_mult[f]
         best_prev = int(np.argmax(dp))
         stay = dp                       # no cost to stay in the same state
         move = dp[best_prev] - cost     # best single predecessor for a switch
@@ -140,12 +187,25 @@ def _merge_segments(path: np.ndarray, bounds: np.ndarray,
 
 
 def _label_segment(seg, chroma, energy, bass, note_names, viterbi_margin,
-                   raw=None):
+                   raw=None, piano_w=None, seg_dur=None):
     f0, f1 = seg['f0'], seg['f1']
     med = np.median(chroma[:, f0:f1], axis=1)
     m = med.max() or 1.0
     med = med / m
-    if raw is not None:
+    piano_used = False
+    if piano_w is not None:
+        # piano-stem voicing evidence: duration x velocity mass per pc across
+        # the segment. When the comping instrument actually voices a chord
+        # here, its pcs ARE the chord (tertian stacking downstream) — far
+        # cleaner than chroma medians, which mix pads/leads/bleed
+        pw = piano_w[:, f0:f1].sum(axis=1)
+        if pw.max() > 0 and seg_dur:
+            strong = pw >= PIANO_PC_KEEP * pw.max()
+            cover = pw.sum() / seg_dur          # ~ weighted sounding seconds
+            if strong.sum() >= PIANO_MIN_PCS and cover >= PIANO_MIN_COVER:
+                med = pw / pw.max()
+                piano_used = True
+    if not piano_used and raw is not None:
         # sustain x magnitude on raw hop frames: pads hold the whole segment,
         # melody notes flicker — suppresses lead bleed the median can't
         Fr, a, b = raw
@@ -208,6 +268,12 @@ def _label_segment(seg, chroma, energy, bass, note_names, viterbi_margin,
             c['score'] += STAGE2_BASS_ROOT_BONUS
         if c['sfx'] in EXOTIC_SFX:
             c['score'] -= EXOTIC_PENALTY
+        # evidence-strength rescoring: mean med over the candidate's template
+        # tones + the root tone's own strength
+        tones = [(c['root'] + iv) % 12
+                 for iv in _TMPL_BY_SFX.get(c['sfx'], (0, 4, 7))]
+        c['score'] += EVIDENCE_W * float(np.mean([med[t] for t in tones])) \
+            + ROOT_EV_W * float(med[c['root']])
     cands.sort(key=lambda c: -c['score'])
 
     top = cands[0]
@@ -236,15 +302,28 @@ def _label_segment(seg, chroma, energy, bass, note_names, viterbi_margin,
 
 
 def recognize(chroma_data: dict, bass: dict, grid: dict, key: dict,
-              note_names: list[str], out_json: Path) -> dict:
+              note_names: list[str], out_json: Path,
+              piano_notes: list | None = None) -> dict:
     chroma = chroma_data['chroma']
     energy = chroma_data['energy']
     bounds = grid['bounds']
     kinds = grid['kind']
     beat_pos = grid['beat_pos']
 
+    piano_w = None
+    cost_mult = None
+    if piano_notes:
+        piano_w = _piano_pc_weights(piano_notes, bounds)
+        onsets = _piano_chord_onsets(piano_notes)
+        if onsets:
+            cost_mult = np.ones(len(bounds) - 1)
+            oa = np.asarray(onsets)
+            for f in range(1, len(bounds) - 1):
+                if np.abs(oa - bounds[f]).min() <= 0.12:
+                    cost_mult[f] = PIANO_ONSET_DISCOUNT
+
     emis = _emissions(chroma, energy, bass)
-    path = _viterbi(emis, kinds)
+    path = _viterbi(emis, kinds, cost_mult)
     segs = _merge_segments(path, bounds, beat_pos)
 
     # per-frame emission margin of the chosen state vs the best other state
@@ -268,7 +347,8 @@ def recognize(chroma_data: dict, bass: dict, grid: dict, key: dict,
             a = int(np.searchsorted(frame_times, t0))
             b = int(np.searchsorted(frame_times, t1))
             raw = (raw_frames, a, b)
-        lab = _label_segment(seg, chroma, energy, bass, note_names, vm, raw)
+        lab = _label_segment(seg, chroma, energy, bass, note_names, vm, raw,
+                             piano_w=piano_w, seg_dur=t1 - t0)
         if lab is None:
             segments.append({'start': round(t0, 4), 'end': round(t1, 4),
                              'chord': 'N', 'alts': [], 'conf': 1.0,
