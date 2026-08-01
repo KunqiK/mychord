@@ -89,7 +89,7 @@ def transcribe_stems(stems_dir: Path, bpm: float | None = None,
                 else:
                     notes = _predict_notes(wav, onset=0.5, frame=0.3,
                                            minlen=90.0, fmin=30.0, fmax=3000.0)
-                notes = _energy_gate(notes, wav)
+                    notes = _energy_gate(notes, wav)
             else:
                 continue
             if not notes:
