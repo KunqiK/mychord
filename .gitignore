@@ -7,3 +7,4 @@ image.png
 # Separate nested git repo (own project, not tracked here)
 Music-Source-Separation-Training-GUI/
 MIDIandMUSIC/audio/
+omr/venv/
