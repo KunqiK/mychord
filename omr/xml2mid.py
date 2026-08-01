@@ -46,11 +46,31 @@ if bpm:
 else:
     print('图里没找到「♩= 数字」速度标记, MIDI 用默认 120 (可在 DAW 改)')
 if force_ts:
-    # OMR 常把拍号认错/谱子本身标错 — 强制替换所有拍号
-    for ts in list(score.recurse().getElementsByClass(music21.meter.TimeSignature)):
-        ts.activeSite.remove(ts)
-    for part in score.parts:
-        part.insert(0, music21.meter.TimeSignature(force_ts))
-    print(f'已强制拍号 = {force_ts}')
+    # 强制拍号 + 压紧空拍: homr 的小节常常没填满名义拍号, MIDI 导出会在
+    # 每小节尾垫静音。按各小节的实际内容时长(跨声部取最长, 保留显式
+    # 休止符)重新首尾相接。
+    parts = list(score.parts)
+    measures = [list(p.getElementsByClass(music21.stream.Measure))
+                for p in parts]
+    n_m = max(len(ms) for ms in measures)
+    durs = []
+    for i in range(n_m):
+        d = max((ms[i].highestTime for ms in measures if i < len(ms)),
+                default=0.0)
+        durs.append(d)
+    new_score = music21.stream.Score()
+    if bpm:
+        new_score.insert(0, music21.tempo.MetronomeMark(number=bpm))
+    for ms in measures:
+        np_ = music21.stream.Part()
+        np_.insert(0, music21.meter.TimeSignature(force_ts))
+        t = 0.0
+        for i, m in enumerate(ms):
+            for el in m.notesAndRests:
+                np_.insert(t + el.offset, el)
+            t += durs[i]
+        new_score.insert(0, np_)
+    score = new_score
+    print(f'已强制拍号 = {force_ts}, 空拍已压紧 ({n_m} 小节)')
 score.write('midi', base + '.mid')
 print('MIDI 已生成: ' + base + '.mid')
