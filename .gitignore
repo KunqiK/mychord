@@ -18,3 +18,5 @@ __pycache__/
 # Chordonomicon raw CSV (264MB, HuggingFace ailsntua/Chordonomicon, CC BY 4.0)
 # — the distilled progressions.npz IS committed
 auto-transcribe/models/chordonomicon/
+# HookTheory dataset (CC BY-NC-SA 3.0 — keep out of the repo)
+auto-transcribe/models/hooktheory/

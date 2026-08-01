@@ -29,6 +29,7 @@
 - **Chordonomicon 进行先验证伪于本曲库**: 67.9 万歌/5054 万 bigram 蒸馏成 (8,12,8) 转移表 (`models\progressions.npz`, build_progressions.py, 榜首=属七五度圈解决/sus4回解, 统计学到的乐理完全正确), 但接进段级 lattice 后 W=1.2 −0.5pp / W=0.5 −0.3pp — **本曲库爱用非常规进行, UG 系套路先验把对的读法拽向陈词滥调**。默认关 (PROG_W=0); lattice 机制保留 (是未来 edge/node 打分器的容器); 解析陷阱: 该数据集升号写作 s (Cs=C#), 但 Dsus4 的 s 不是升号 (regex 需 s(?!us))
 - **今日净战果: root 37.2 → 39.0 (+1.8pp 真实泛化口径) / 中位 +3.7pp, 全部来自 BTC 双权重投票**; 微调换代照常自动生效 (best.pt mtime 进缓存 params)
 - 下一步 (按价值重排): ①HookTheory 子集微调 (user 已授权, 数据大招, 直接强化已被证明有效的 BTC 路线) ②Claude 符号裁决器 (分歧段, 订阅 headless) ③Chordino 异质第三票 ④条件高斯 p(chroma|和弦)
+- **HookTheory 落料已开动 (08-01 傍晚)**: `models\hooktheory\Hooktheory.json.gz` (19MB, SHA256 验证, CC BY-NC-SA 不入 git) → `btc_finetune\prep_hooktheory.py` 转换: 17,853 段标注 → **10,847 个 youtube id / 107.6 小时和声** (clips.jsonl, 和弦已是绝对音高+精化对齐, 直接映射进 8 质性词表); pilot.txt = 按标注时长排序前 300 (10.8h = 现有数据 6.5 倍)。**坑: yt-dlp --download-sections 走 ffmpeg 会被 YouTube 节流卡死 — 整曲 bestaudio 反而快 10 倍** (3-4MB/首), 裁剪推迟到特征构建。试点 300 首下载后台进行中。**下一班**: ①写特征构建 (裁 [t0,t1] + 铺帧标签, 复用 prep_features 管线) ②混入现有 38 首 + 移调增强重训 ③34 首 batch_eval 验收 (预期这是把 root 推向 45%+ 的一击)
 
 ## 首次 BTC 微调 (2026-08-01 凌晨, 40 首数据集)
 
