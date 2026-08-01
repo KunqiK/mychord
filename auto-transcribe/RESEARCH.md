@@ -49,13 +49,48 @@ NeuralNote 不替代管线,做**难段补扒**:把 `cache\<歌>\stems\vocals.wav
 
 **可用的半自动路径(已验证数字)**:lines.mid 复音草稿覆盖 **Lead 61% / Arp 81%**(敏感阈值,力度=置信度)→ DAW 里力度过滤 + loop 对听删修。Arp 尤其可行:模式重复,修对一遍 pattern 即可复制。
 
+## 乐器级分离生态大调查 (2026-07-31, 10 路并行研究)
+
+**上面 07-30 的"社区没有乐器分离模型"结论已过时** —— 这一年 roformer 社区爆发了。已全部核实在线并接入管线 (`--stems` flag, MSST 引擎, `.venv-sep` 独立环境):
+
+| 模型 | 覆盖 | 质量证据 | 状态 |
+|---|---|---|---|
+| **BS-Roformer-SW 6轨** (vocals/drums/bass/**guitar**/**piano**/other) | 667MB ckpt, HF enerjazzer/BS-ROFO-SW-Fixed 镜像 (jarredou 原库已 401) | **MVSEP 排行钢琴 SDR 7.8 第一 (LALAL.AI 只有 5.05, Logic Pro 7.79); 吉他 9.05 第一**; drums 14.11 / bass 14.62 | ✅ 已接入 `--stems 6` |
+| **MVSep Mega-53** (ZFTurbo 官方, 53 乐器单模型 78MB/个: synth, electric-guitar, acoustic-guitar, strings, organ, saxophone, violin, brass, kick/snare/hh/toms…) | HF noblebarkrr/BS-Roformer-MVSep-Mega-53-stems | ZFTurbo 自述低于 MVSEP 站内专用模型, draft 级 | ✅ 已接入 (任意乐器名直接 `--stems organ` 就能用) |
+| **lead-synth 专用分离** (oulianov/bsroformer-lead-synth, 2026-06-24) | 163MB, epoch 1 | SDR 4.99 (草稿级) — **第一个器乐 lead 分离模型**, 直击 SATELLITE 未解难题 | ✅ 已接入 `--stems leadsynth` |
+| becruily 吉他 MelBand-Roformer | 43MB, 最快 | 社区口碑, 无发表 SDR | ✅ 已接入 `--stems guitar` |
+| Banquet query-based 任意乐器 (kwatcharasupat/query-bandit, MIT) | 给一段目标乐器采样当 query | ISMIR 2024: 吉他/钢琴超 HTDemucs | ⏳ 跟踪 (CPU 可行性未证) |
+
+- **引擎**: ZFTurbo/Music-Source-Separation-Training (MIT, `inference.py --force_cpu`), 浅克隆在 `msst/` (commit e247dfe), 独立 `.venv-sep` (torch 2.5.1 CPU + numpy 2 — 和主 venv 的 numpy 1.26 钉死互不干扰)。权重不入库 (多数社区 ckpt 无明确许可), 首次使用自动从 HF 下载到 `models/sep/`
+- **CPU 代价是主要税**: roformer 比 demucs 重一个量级 (demucs 50s/歌 → roformer 每模型几十分钟, 见下方实测)。缓解: 结果按歌+模型缓存、按需单乐器、num_overlap 可降
+- 备选路径 (未用, 记档): elicwhite/bs-roformer-sw-6stem-onnx (MIT, fp16 336MB, 可上 onnxruntime+DirectML 吃核显)、BSRoformer.cpp (GGML q8_0, Windows 预编译)、pip audio-separator / bs-roformer-infer (更省事但模型面窄)
+- GUI 侧: UVR5 半死 (2023 停更, beta 补丁可载 roformer)、MSST-WebUI 进维护模式 (AGPL)、**继任者 pymss-studio** (2026-07-29 出 Windows-CPU 包, beta) — 都不如直接用我们的 `--stems`/桌面「拆乐器」入口 + FL/NeuralNote 消费 stems
+- FL Studio 自带 stem 分离 = 同款 demucs 4轨, 无增益, 跳过
+
+## 要不要上 LLM 扒谱/分离? — 答案: 不要 (2026-07-31, 硬数据)
+
+- 音频 LLM 在扒谱任务上是灾难级: CMI-Bench (11 个开源音频 LLM) 旋律提取 5.06 vs 监督模型 65.3, 调性 8.55 vs 74.3; PitchBench: GPT-4o-audio **单音音高识别只有 6.1%**; MUSE: Gemini 2.5 Pro 和弦识别 58.3%。2025 AMT Challenge 零 LLM 参赛, 冠军全是任务专用 encoder-decoder
+- **术语澄清**: MT3/YourMT3 是"长得像 LLM 的转录 transformer" (T5 输出 MIDI token), 不是聊天 LLM — 这类才是正解且有现成权重 (pip mt3-infer, MIT, CPU 可跑, YourMT3 536MB 多乐器 → 候选下一步)
+- LLM 唯一有据可查的位置: 文本 LLM 对 MIR 工具输出做和弦推理修正 (+1~2.77% MIREX) — 这个角色 Claude 已经免费在干 (report.md 低置信度清单)
+
+## 和弦级免费升级点 (调查副产品, 未做)
+
+- **P0 (零依赖, 直击边界 F=0.44)**: Viterbi 换弦代价改成节拍位置相关 (正拍便宜/拍中贵) + 和声距离相关 (五度圈近的便宜) — SOTA 全在用平坦代价, 我们的恒速网格是他们没有的优势; 另加段落合并滞回后处理
+- P1: BTC large-voca (MIT, 12MB ckpt 在库里, torch 2.5.1 兼容) 做第二意见, 边界求交
+- P2: crema 的斜杠低音技巧 — 段内 bass-chroma 后验几何平均代替逐帧 argmax
+- 校准认知: 发表 SOTA 也就 maj/min WCSR 82-84%, 大词表 63-65%, 人类标注者一致率才 70 中段 — 我们域外 EDM 71.7% 和声兼容 = 已在同一水平线; **差距只在边界, 不在词表**
+- 节拍: beat_this (MIT, ISMIR 2024) 可自动定强拍相位, 退役 --downbeat-shift 手动 flag (变速歌备用)
+
 ## 路线图(按价值排序)
 
-1. **⏳ 跟踪社区 lead/melody 分离模型**(roformer 生态在活跃出新 stem 模型;一旦出现即接入 — MSST 基础设施已装)
-2. **`--engine piano`**(ByteDance 模型)—— 钢琴素材专线,带力度踏板
-3. NeuralNote 式部分量化 `--quantize-strength`(需要"人味"时)
-4. 变拍支持(ChordHUD meterMap 已支持,管线未利用)
-5. ~~contour 矩阵多声线分离~~ — 已证伪(表示层瓶颈,见上表)
+1. **✅ 乐器级分离已接入** — 待办: SW/Mega/leadsynth 对 GT 实测打分 (见上)
+2. **和弦边界 P0 补丁** (节拍位置相关换弦代价, 零依赖)
+3. **mt3-infer / YourMT3** 多乐器 MIDI 草稿实验 (对 GT 打分后决定去留)
+4. 每乐器专家转录: SwiftF0 (人声 F0, pip, MIT), ADTOF-pytorch (鼓), transkun (钢琴 A/B)
+5. NeuralNote 式部分量化 `--quantize-strength`(需要"人味"时)
+6. 变拍支持(ChordHUD meterMap 已支持,管线未利用)
+7. ~~contour 矩阵多声线分离~~ — 已证伪(表示层瓶颈,见上表)
+8. 跟踪: pymss-studio 出正式版、Banquet CPU 试跑、AMT-2025 冠军 MIROS 放权重、deton24 文档新模型
 
 ## 用户 correct 参照驱动的第二轮 (2026-07-30 晚)
 

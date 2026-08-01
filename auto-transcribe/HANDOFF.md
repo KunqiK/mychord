@@ -1,4 +1,10 @@
-# auto-transcribe 项目交接 (2026-07-30)
+# auto-transcribe 项目交接 (2026-07-31 更新)
+
+> 07-31 新增:**乐器级分离** (`--stems`, MSST + 社区 roformer, 桌面「拆乐器」入口, 独立 `.venv-sep`)。
+> 详见 README「乐器级分离」节 + RESEARCH.md「乐器级分离生态大调查」。
+> "社区没有乐器/lead 分离模型" 的旧结论已被推翻 —— SW 6轨 (钢琴/吉他 MVSEP 双第一)、
+> Mega-53 (53 种乐器)、lead-synth 实验模型都已接入。LLM 问题也有了硬数据答案:不用 LLM
+> (音频 LLM 单音音高识别只有 6.1%),MT3 类转录 transformer 才是正解 (pip mt3-infer, 待实验)。
 
 给下一个 agent:两分钟看完这份就能接手。用户是 Kunqi,做和声分析视频,上支视频 60 小时花在人工扒谱上。
 
@@ -55,11 +61,13 @@ transcribe.cmd "<歌>" [--click --bpm N --key "Ab Major" --downbeat-shift 0..3
 
 | 文件 | 内容 |
 |---|---|
-| `C:\Users\kunqi\Downloads\S.A.T.E.L.L.I.T.E.mid` | 人工全曲扒谱,24 轨(Pad/Piano/String 和声,Lead/Vocal 旋律),150 BPM |
-| `C:\Users\kunqi\Downloads\correct chord.mid` | 用户给的正确和弦声部,202 事件,**平均 0.89s 换一次弦** |
-| `C:\Users\kunqi\Downloads\correct vocal melody.mid` | 正确人声旋律,154 音符,音域 51-68 |
-| 音频 | `D:\!!!Production\Reference Tracks\Camellia\[C95] …\07. S.A.T.E.L.L.I.T.E..flac` |
+| **`gt\S.A.T.E.L.L.I.T.E.mid`(已入库)** | 人工全曲扒谱,24 轨(Pad/Piano/String 和声,Lead/Vocal 旋律),150 BPM |
+| 音频 | `D:\!!!Production\Reference Tracks\Camellia\[C95] かめるかめりあ — heart of android {CTCD-0018} [CD-FLAC]\07. S.A.T.E.L.L.I.T.E..flac` |
 | cache slug | `07_S_A_T_E_L_L_I_T_E-374430a1` · **对齐偏移 = +2.04s**(音频减 MIDI) |
+
+⚠️ 2026-07-31:用户清理 Downloads 时把 GT 删进了回收站 —— 已抢救回 `gt\` 并入 git。
+`correct chord.mid`(202 事件)没能找回;`correct vocal melody.mid` 内容 = GT 的 Vocal 轨(154 音符),无损失。
+**评测一律用 `gt\S.A.T.E.L.L.I.T.E.mid`,别再引用 Downloads 路径。**
 
 ⚠️ 输出文件夹里的 `wrong chords.mid` / `wrong vocal.mid` 是**用户重命名的早版(有时间拉伸 bug)输出**,不代表当前质量,别拿它们评估。
 

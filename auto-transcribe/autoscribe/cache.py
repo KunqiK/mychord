@@ -16,6 +16,7 @@ from pathlib import Path
 # stage → stages that must be invalidated when it re-runs
 DOWNSTREAM = {
     'separate': ['beats', 'key', 'chroma', 'bass', 'chords', 'melody'],
+    'separate_ext': [],   # instrument-level stems (additive; nothing consumes them yet)
     'beats':    ['key', 'chroma', 'bass', 'chords', 'melody'],
     'chroma':   ['key', 'chords'],
     'bass':     ['chords'],

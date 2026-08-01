@@ -35,12 +35,22 @@ def build_parser() -> argparse.ArgumentParser:
                    help='mix vocals into harmony chroma at this weight (default: auto)')
     p.add_argument('--model', default='htdemucs',
                    choices=['htdemucs', 'htdemucs_ft'])
+    p.add_argument('--stems', default=None,
+                   help='乐器级分离 (逗号分隔): 6=六轨全套(人声/鼓/贝斯/吉他/钢琴/其他, '
+                        'MVSEP 排行第一的 BS-Roformer-SW), synth, strings, eguitar, '
+                        'aguitar, guitar, leadsynth, 或任意 MVSep Mega-53 乐器名 '
+                        '(organ/saxophone/violin/brass/…)。CPU 上每个模型需要几分钟'
+                        '到几十分钟, 结果缓存')
+    p.add_argument('--stems-only', action='store_true',
+                   help='只做乐器分离并导出 stems 音频, 跳过扒谱全流程')
     p.add_argument('--piano', action='store_true',
                    help='also run the ByteDance piano engine (velocity+pedal) '
                         '→ piano.mid; best on piano-led material')
-    p.add_argument('--piano-stem', default='input', choices=['input', 'other'],
+    p.add_argument('--piano-stem', default='input',
+                   choices=['input', 'other', 'piano'],
                    help='piano engine input: the full mix (default, for piano '
-                        'recordings) or the separated other stem')
+                        'recordings), the demucs other stem, or the dedicated '
+                        'piano stem from "--stems 6" (best on band mixes)')
     p.add_argument('--lines-scale-snap', action='store_true',
                    help='drop out-of-key notes from lines.mid poly/lead tracks '
                         '(NeuralNote-style scale filter; off by default — '
@@ -50,7 +60,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument('--preview-melody', action='store_true',
                    help='add a sine render of the melody to preview.wav')
     p.add_argument('--force', default=None,
-                   help='re-run a stage (separate/beats/key/chroma/bass/chords/melody) or "all"')
+                   help='re-run a stage (separate/separate_ext/beats/key/chroma/'
+                        'bass/chords/melody) or "all"')
     p.add_argument('--verify-install', action='store_true',
                    help='check environment and exit')
     return p
@@ -147,6 +158,23 @@ def main(argv=None) -> int:
         audio_io.decode_to_wav(audio_path, input_wav)
     duration = audio_io.duration_seconds(input_wav)
 
+    if args.stems:
+        from . import separate_ext as sepext_mod
+        stem_keys = sepext_mod.resolve(args.stems.split(','))
+        ext_dir = sc.path('stems_ext')
+        sc.run_stage('separate_ext', {'models': stem_keys, 'v': 1},
+                     sepext_mod.expected_outputs(ext_dir, stem_keys),
+                     lambda: sepext_mod.separate_ext(input_wav, ext_dir,
+                                                     stem_keys))
+        copied = sepext_mod.export_stems(ext_dir, stem_keys, out_dir / 'stems')
+        print(f'    {len(copied)} stem files → {out_dir / "stems"}')
+        if args.stems_only:
+            print(f'all done in {time.time() - t_start:.0f}s → {out_dir}')
+            return 0
+    elif args.stems_only:
+        print('--stems-only 需要配合 --stems (例如 --stems 6)')
+        return 2
+
     stems_dir = sc.path('stems')
     sc.run_stage('separate', {'model': args.model},
                  [stems_dir / f'{s}.wav' for s in separate_mod.STEMS],
@@ -232,8 +260,14 @@ def main(argv=None) -> int:
     if args.piano:
         from . import piano as piano_mod
         piano_json = sc.path('piano.json')
-        piano_src = input_wav if args.piano_stem == 'input' \
-            else stems_dir / 'other.wav'
+        if args.piano_stem == 'piano':
+            piano_src = sc.path('stems_ext') / 'sw6' / 'piano.flac'
+            if not piano_src.exists():
+                print('    --piano-stem piano 需要先跑 --stems 6 (无缓存的钢琴轨)')
+                return 2
+        else:
+            piano_src = input_wav if args.piano_stem == 'input' \
+                else stems_dir / 'other.wav'
         sc.run_stage('piano', {'stem': args.piano_stem, 'v': 1}, [piano_json],
                      lambda: piano_mod.transcribe(piano_src, piano_json))
         piano_data = piano_mod.load(piano_json)

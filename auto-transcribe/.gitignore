@@ -1,5 +1,8 @@
 .venv/
+.venv-sep/
 cache/
 output/
 __pycache__/
 *.pyc
+msst/
+models/sep/

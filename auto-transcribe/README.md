@@ -31,10 +31,22 @@ transcribe.cmd "歌曲.flac" [选项]
 --lead-floor C4           # 器乐 lead 的 skyline 音域下限
 --model htdemucs_ft       # 更慢更细的分离(顽固歌曲用)
 --click --preview-melody  # preview.wav 加 click / 旋律正弦
---force separate|beats|key|chroma|bass|chords|melody|all   # 强制重跑某阶段
+--stems 6                 # 乐器级分离: 6轨全套 (vocals/drums/bass/guitar/piano/other)
+--stems synth,strings     # 或任意 Mega-53 乐器 (eguitar/aguitar/organ/saxophone/violin/…)
+--stems-only              # 只分离导出 stems, 跳过扒谱 (桌面「拆乐器」= --stems 6 --stems-only)
+--piano-stem piano        # ByteDance 钢琴引擎吃 --stems 6 分出来的专用钢琴轨
+--force separate|separate_ext|beats|key|chroma|bass|chords|melody|all   # 强制重跑某阶段
 ```
 
 分离结果等全部缓存(`cache\`),调参数重跑不用再等 demucs。
+
+### 乐器级分离(`--stems`,2026-07-31 新增)
+
+- 引擎 = [MSST](https://github.com/ZFTurbo/Music-Source-Separation-Training)(MIT,浅克隆在 `msst\`)跑社区 BS/MelBand-Roformer 模型,独立 `.venv-sep` 环境(`setup_sep.cmd` 一键装;numpy 2 与主 venv 隔离)
+- `--stems 6` = **BS-Roformer-SW**:MVSEP 排行榜钢琴 SDR 7.8 / 吉他 9.05 双第一(超 LALAL.AI 与 Logic Pro)
+- 单乐器 = MVSep Mega-53 官方权重按乐器拆分(78MB/个,draft 级),`guitar`=becruily 专模,`leadsynth`=社区 lead 分离实验模型(SDR 4.99)
+- 权重不入库,首次使用自动下载到 `models\sep\`;单乐器模型额外给 `minus_<乐器>` 伴奏轨
+- ⚠️ CPU 代价:每模型每歌几十分钟(结果永久缓存;加新乐器不重跑已有的)
 
 ## 工作流
 
@@ -76,6 +88,7 @@ selftest 基线:16/16 和弦(含 G/B 斜杠、Gsus4、G7、Cmaj7)、BPM 120.00�
 autoscribe\
   hud_port.py    ChordHUD v17.4 逐字移植:22模板 detectChords / keyNotes 拼写引擎
   separate.py    demucs htdemucs 四轨分离 (CPU)
+  separate_ext.py 乐器级分离 (MSST/roformer 子进程, --stems, 模型注册表+自动下载)
   beats.py       BPM/拍网格(drums轨) + 强拍相位启发式
   chroma.py      other轨 HPSS→CQT chroma(36bin)→半拍同步
   bassline.py    bass轨 pyin 根音 + 低频chroma回退
@@ -92,8 +105,11 @@ autoscribe\
 ## 评测(有标准答案 MIDI 时)
 
 ```
-.venv\Scripts\python.exe evaluate_gt.py --midi GT.mid --cache cache\<slug> [--details]
+.venv\Scripts\python.exe evaluate_gt.py --midi gt\S.A.T.E.L.L.I.T.E.mid --cache cache\<slug> --offset 2.04 [--details]
+.venv\Scripts\python.exe eval_lead_stem.py --stem <分离出的stem> --midi gt\S.A.T.E.L.L.I.T.E.mid --track Lead --offset 2.04
 ```
+
+GT 基准 MIDI 常驻 `gt\`(2026-07-31 从被清理的 Downloads 抢救入库,勿删)。
 自动用 bass 声部吻合度对齐音频↔MIDI 偏移;输出 root/质性/全名/**和声兼容**(我们的和弦音 ⊆ 实际在响的和声 = 合法读法)/root-in-alts 五级指标 + 旋律音符级 P/R。基准 (Camellia S.A.T.E.L.L.I.T.E., 人工全曲扒谱 MIDI): root 34.8%, 和声兼容 71.3%, BPM 149.995/150。
 
 ## 已知边界
