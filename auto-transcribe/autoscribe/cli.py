@@ -288,7 +288,7 @@ def main(argv=None) -> int:
     sc.run_stage('chords', {'key': key['active_key'], 'voc_w': voc_w,
                             'harm': [f'{p.parent.name}/{p.name}' for p in harm_wavs],
                             'pev': bool(piano_evidence),
-                            'sev': bool(synth_evidence), 'v': 4},
+                            'sev': bool(synth_evidence), 'v': 5},
                  [chords_json],
                  lambda: chords_mod.recognize(chroma_data, bass, grid, key,
                                               note_names, chords_json,

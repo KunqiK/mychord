@@ -13,9 +13,40 @@ from pathlib import Path
 
 import numpy as np
 
-from .hud_port import CHORD_TEMPLATES, INTERVAL_WEIGHTS, detect_chords
+from .hud_port import (CHORD_TEMPLATES, INTERVAL_WEIGHTS, NOTE_NAMES,
+                       detect_chords)
 
 _TMPL_BY_SFX = dict(CHORD_TEMPLATES)
+
+
+def _candidates_ext(pitch_classes, bass_pc=None, note_names=None,
+                    cap=16, missing_pen=1.5):
+    """Widened detect_chords (mirrors hud_port's verbatim port): more
+    candidates survive to evidence rescoring, and rootless shell voicings
+    (3rd+5th+7th present, root absent — jazz comping norm) are punished a
+    little less. The port itself stays untouched; alts/labels remain
+    ChordHUD-compatible names."""
+    import math
+    names = note_names if note_names is not None else NOTE_NAMES
+    pcs = list(dict.fromkeys(int(p) % 12 for p in pitch_classes))
+    out = []
+    for root in range(12):
+        for sfx, ivs in CHORD_TEMPLATES:
+            needed = [(root + iv) % 12 for iv in ivs]
+            hits = sum(1 for n in needed if n in pcs)
+            if hits < math.ceil(len(ivs) * 0.75):
+                continue
+            missing = len(ivs) - hits
+            extra = sum(1 for p in pcs if p not in needed)
+            score = sum(INTERVAL_WEIGHTS[iv] for iv in ivs
+                        if (root + iv) % 12 in pcs) \
+                - missing * missing_pen - extra * 1
+            name = names[root] + sfx
+            if bass_pc is not None and bass_pc % 12 != root:
+                name += '/' + names[bass_pc % 12]
+            out.append({'name': name, 'score': score, 'root': root, 'sfx': sfx})
+    out.sort(key=lambda c: -c['score'])
+    return out[:cap]
 
 # ── stage-1 vocabulary ──
 CORE_QUALITIES = [
@@ -288,7 +319,7 @@ def _label_segment(seg, chroma, energy, bass, note_names, viterbi_margin,
     # the chord is named from the pad content; the bass becomes a slash.
     # (bass pc is NOT injected into the pc set — "Abmaj7/Db", not "Dbmaj9",
     # unless the pads themselves also voice the bass note)
-    cands = detect_chords(sorted(pcs), bass_pc, note_names)
+    cands = _candidates_ext(sorted(pcs), bass_pc, note_names)
     if not cands:
         # fewer than 3 usable pcs — trust the Viterbi state (it had temporal
         # context) instead of reporting a bogus no-chord
