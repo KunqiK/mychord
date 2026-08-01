@@ -55,7 +55,17 @@ NeuralNote 不替代管线,做**难段补扒**:把 `cache\<歌>\stems\vocals.wav
 | **Mega-53 synth 轨** | **30.9%** | **53.6%** | **50.3%** | **5707** |
 | (对照) demucs other 复音草稿 | 22-31.5% (各法) | — | 61% | ~10000 |
 
-读法:**Mega-53 synth 轨让"普通 basic-pitch"直接摸到了原来定制 CQT 算法的 31.5% 天花板**,且用一半音符数覆盖 50% GT —— 表示层确实被分离模型改善了,但 synth 轨里 lead/pad/arp 仍混在一起,"最高音=lead"的假设还是不成立。lead-synth 专模 (仅 1 epoch) 低于基线,当"lead 活跃段门控"可能比当音高来源更有用。**下一步最有价值的组合:synth 轨草稿进 lines.mid**(比 other 轨草稿干净一倍),以及 synth 轨 ∩ lead-synth 能量门控。
+读法:**Mega-53 synth 轨让"普通 basic-pitch"直接摸到了原来定制 CQT 算法的 31.5% 天花板**,且用一半音符数覆盖 50% GT —— 表示层确实被分离模型改善了,但 synth 轨里 lead/pad/arp 仍混在一起,"最高音=lead"的假设还是不成立。lead-synth 专模 (仅 1 epoch) 低于基线,当"lead 活跃段门控"可能比当音高来源更有用。✅ synth 轨草稿已集成进 lines.mid (「Synth stem draft (cleaner)」轨, commit e7ef4db)。
+
+### SW 6轨全曲验证 (2026-07-31, 全曲 CPU 32 分钟)
+
+| stem | 指标 (vs GT 对应轨, 同法同阈值) | 对照 |
+|---|---|---|
+| **piano** | **音符覆盖 62.0%** (3103 音符), 帧级任意音 62.8% | htdemucs_6s 钢琴轨召回只有 24.5% (已证伪路线) → **2.5 倍提升, 钢琴路线复活** |
+| vocals | 覆盖 74.7% / 任意音 53.8% | demucs vocals 73.4% / 50.0% — **无质差, demucs 继续当默认人声源** (快 30 倍) |
+| guitar | RMS = 0.0 | 这首本来就没吉他 — **模型不幻觉内容, 精度可信**; 吉他质量待用户的吉他歌实测 |
+
+结论: SW 的价值在**乐器 stem**(钢琴/吉他), 4 轨基础分离维持 demucs 不变。钢琴素材新推荐链: `--stems 6` → `--piano --piano-stem piano` (ByteDance 引擎吃专用钢琴轨)。
 
 **可用的半自动路径(已验证数字)**:lines.mid 复音草稿覆盖 **Lead 61% / Arp 81%**(敏感阈值,力度=置信度)→ DAW 里力度过滤 + loop 对听删修。Arp 尤其可行:模式重复,修对一遍 pattern 即可复制。
 
