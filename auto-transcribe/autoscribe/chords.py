@@ -121,10 +121,24 @@ SPLIT_AT_ONSETS = False             # cutting segments at piano onsets measured 
 # ── BTC posterior second opinion (official large_voca + our fine-tune) ──
 # The transformer sees the full CQT context, so its root belief survives a
 # masked root fundamental — evidence from OUTSIDE the pc-set ceiling.
-BTC_ROOT_W = 8.0                    # weight on the max-normed root marginal
-                                    # (2.5 was tuned against the weaker run1
-                                    #  model; raised as the model improved)
-BTC_QUAL_W = 2.5                    # weight on the exact (root, quality) posterior
+def _btc_weights():
+    """Vote weights for the BTC posterior. Priority: env override (used by
+    sweep_btc_weights.py) > models\\btc_weights.json (written by the sweep's
+    --apply after every retrain — a stronger model earns a bigger vote) >
+    hardcoded default (the 2026-08-01 run3 sweep plateau)."""
+    import os
+    cfg = {}
+    try:
+        p = Path(__file__).resolve().parents[1] / 'models' / 'btc_weights.json'
+        if p.exists():
+            cfg = json.loads(p.read_text(encoding='utf-8'))
+    except Exception:                                         # noqa: BLE001
+        cfg = {}
+    return (float(os.environ.get('AS_BTC_ROOT_W', cfg.get('root_w', 8.0))),
+            float(os.environ.get('AS_BTC_QUAL_W', cfg.get('qual_w', 2.5))))
+
+
+BTC_ROOT_W, BTC_QUAL_W = _btc_weights()
 BTC_FT_MIX = 0.5                    # fine-tuned model's share when both ckpts exist
 # our 22 template suffixes -> large_voca quality index (14 per root block:
 # ['min','maj','dim','aug','min6','maj6','min7','minmaj7','maj7','7','dim7',

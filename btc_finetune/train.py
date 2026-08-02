@@ -49,6 +49,7 @@ LR = 1e-4
 BATCH = 8
 EVAL_BATCH = 16
 MAX_EPOCH = 50
+PATIENCE = 12              # early stop: epochs without a new val_acc best
 TRAIN_STRIDE = 54          # 50% overlapping windows for training
 VAL_STRIDE = 108           # non-overlapping for validation
 SEED = 1337
@@ -205,6 +206,7 @@ def main() -> None:
     pad_val = float((np.log(1e-6) - mean) / std)
     rng = np.random.default_rng(SEED + start_epoch)
     aug_rng = np.random.default_rng(SEED * 2 + start_epoch)
+    best_acc, best_epoch = -1.0, 0
     for epoch in range(start_epoch, MAX_EPOCH + 1):
         t0 = time.time()
         order = rng.permutation(len(tr_windows))
@@ -231,6 +233,12 @@ def main() -> None:
         log(f'EPOCH {epoch}/{MAX_EPOCH} train_loss {run_loss / max(nb, 1):.4f} '
             f'val_loss {v_loss:.4f} val_acc {v_acc:.4f} '
             f'elapsed {time.time() - t0:.0f}s')
+        if v_acc > best_acc:
+            best_acc, best_epoch = v_acc, epoch
+        elif epoch - best_epoch >= PATIENCE:
+            log(f'DONE: early stop (no val improvement since epoch '
+                f'{best_epoch}, best {best_acc:.4f})')
+            return
 
     log('DONE: reached MAX_EPOCH')
 
