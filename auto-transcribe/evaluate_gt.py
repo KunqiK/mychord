@@ -132,6 +132,44 @@ def estimate_offset(gt_drum_notes, drums_wav: Path) -> float:
     return float(lag / fps)
 
 
+def estimate_offset_root(harm, bass, segments) -> float | None:
+    """Nuisance-parameter alignment v2: scan the offset that maximizes
+    OUR-root vs GT-root agreement directly (the GT MIDIs are user files with
+    arbitrary time origins; bass-pc agreement failed on ~5 songs — narrow
+    range and weak pyin bass). Applied uniformly to every song, so scores
+    stay comparable across pipeline versions (benchmark v2)."""
+    gt_end = max(n['end'] for n in harm)
+    samples = []
+    for t in np.arange(0.0, gt_end, 0.5):
+        gt = gt_chord_at(harm, bass, t)
+        if gt is not None:
+            samples.append((t, gt['root']))
+    if len(samples) < 40:
+        return None
+    starts = np.array([s['start'] for s in segments])
+    roots = np.array([-1 if s.get('root_pc') is None else s['root_pc']
+                      for s in segments])
+    ends = np.array([s['end'] for s in segments])
+
+    def agree(off):
+        ok = tot = 0
+        for t, g in samples:
+            i = int(np.searchsorted(starts, t + off, side='right')) - 1
+            if i < 0 or t + off >= ends[i] or roots[i] < 0:
+                continue
+            tot += 1
+            ok += (roots[i] == g)
+        return ok / tot if tot >= 40 else -1.0
+
+    coarse = max(np.arange(-6.0, 16.01, 0.25), key=agree)
+    fine = max(np.arange(coarse - 0.3, coarse + 0.31, 0.05), key=agree)
+    sc = agree(fine)
+    if sc <= 0:
+        return None
+    print(f'root-agreement offset: {fine:+.2f}s (agreement {sc:.1%})')
+    return float(fine)
+
+
 def sounding_pcs(notes, t, min_len=0.0):
     return sorted({n['midi'] % 12 for n in notes
                    if n['start'] <= t < n['end']
@@ -207,7 +245,9 @@ def main():
     if args.offset is not None:
         offset = args.offset
     else:
-        offset = estimate_offset_bass(bass, cache) if bass else None
+        offset = estimate_offset_root(harm, bass, segments)
+        if offset is None:
+            offset = estimate_offset_bass(bass, cache) if bass else None
         if offset is None:
             offset = estimate_offset(drums, cache / 'stems' / 'drums.wav') \
                 if drums else 0.0

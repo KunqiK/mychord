@@ -47,6 +47,13 @@
 - **评测卡尺待校准**: 垫底 4 首 (Alb 5.4/AMARA 8.9/Alexandrite(1) 10.9/playable edit 13.6) offset 可疑 (playable edit 判 0.000 而原版 +1.40) — 拖累均值且掩盖真实涨幅, 下一班先做诊断; 校准会改变基准, 前后数字要分开记
 - 下一班顺序: ①评测 offset 诊断 ②冷却后续下载 (脚本 sleep 已加倍) ③满 1500+ 首再 run5 (早停已生效) + harvest ④Claude 符号裁决器
 
+**评测卡尺 v2 (08-02 凌晨): 旧卡尺一直低估 ~6pp**
+- 诊断 (offset 网格扫描 vs auto): 1fle33 25.7→41.0 (+5.2s)、playable edit 25.0→38.6、Abiogenesis 真实 offset +13.9s、Aleph −3.6s — 旧 bass-agreement 扫描范围 (−2..+8) 装不下且 pyin 弱
+- 修复①: evaluate_gt 加 `estimate_offset_root` (根音一致性直接扫 −6..+16, 0.25 细化) 为主对齐器 — offset 本就是评测的干扰参数, 全体歌统一适用, 版本间可比
+- 修复②: gt_tracks.pick 双手钢琴抢救 — 'Piano (L)' 落在 bass (太复音) 和 harmony (太低) 之间被丢弃, 右手单线撑不起和弦真值; 和声池 ≤1 轨时把落选音高轨全部并入 (playable edit 兼容 4.5→44.7%)
+- **卡尺 v2.1 基准 (同一管线, 数字不与 v1 可比): root 均值 46.3% / 中位 49.1% / 兼容 50.5%** (v1 口径同状态 = 40.5/44.7/44.5)
+- 残余真差 3 首 (Alb/AMARA/Alexandrite(1) 12-14%): 全 offset 扫描也救不动, 疑音频版本/编曲不对, 属数据问题非管线问题
+
 ## 首次 BTC 微调 (2026-08-01 凌晨, 40 首数据集)
 
 - 数据: `MIDIandMUSIC\dataset\` 38 首 × 0.25s 帧标签 (99 分钟), 8 质性×12根音映射进 large_voca; 验证集 6 首固定 (近重复对不跨界)

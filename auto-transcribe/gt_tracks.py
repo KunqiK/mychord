@@ -81,6 +81,16 @@ def pick(tracks: dict) -> dict:
                                       1 if LEAD_RE.search(n or '') else 2,
                                       -len(tracks[n])))
         out[role] = names
+    if len(out['harmony']) <= 1:
+        # two-hand-piano / sparse-GT rescue: a lone right hand carries too
+        # few 2+-note frames to define chords (Piano L fell between bass —
+        # too polyphonic — and harmony — too low). Pool every leftover
+        # pitched track into the harmony truth.
+        used = set(out['melody'][:1]) | set(out['bass']) | set(out['drums'])
+        extra = [n for n, r in roles.items()
+                 if r in ('other', 'melody') and n not in used
+                 and n not in out['harmony']]
+        out['harmony'] = out['harmony'] + extra
     return out
 
 
