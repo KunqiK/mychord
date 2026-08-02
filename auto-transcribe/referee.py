@@ -126,10 +126,15 @@ def build_prompt(key: dict, disputes) -> str:
 
 
 def ask_claude(prompt: str) -> dict | None:
-    r = subprocess.run(f'claude -p --model {MODEL}',
-                       input=prompt, capture_output=True, text=True,
-                       encoding='utf-8', errors='replace', timeout=300,
-                       shell=True)
+    try:
+        r = subprocess.run(f'claude -p --model {MODEL}',
+                           input=prompt, capture_output=True, text=True,
+                           encoding='utf-8', errors='replace', timeout=600,
+                           shell=True)
+    except subprocess.TimeoutExpired:
+        return None
+    except Exception:                                         # noqa: BLE001
+        return None
     out = (r.stdout or '').strip()
     m = re.search(r'\{.*\}', out, re.DOTALL)
     if not m:
@@ -175,16 +180,21 @@ def experiment(limit: int | None) -> None:
     from autoscribe.cache import song_slug
     mani = json.loads((AT.parent / 'MIDIandMUSIC' / 'dataset' /
                        'manifest.json').read_text(encoding='utf-8'))
+    import time
     n = 0
     for base, info in sorted(mani.items()):
         cache = AT / 'cache' / song_slug(Path(info['audio_path']))
         if not (cache / 'chords.json').exists():
+            continue
+        if (cache / 'chords_ref.json').exists():
+            print(f'[skip] {base} (already refereed)', flush=True)
             continue
         if limit and n >= limit:
             break
         nd, ch = referee_song(cache)
         n += 1
         print(f'[{n}] {base}: {nd} disputes, {ch} changed', flush=True)
+        time.sleep(3)
 
 
 def measure() -> None:
