@@ -38,7 +38,7 @@ PILOT = HT_DIR / 'pilot.txt'
 AUDIO_DIR = HT_DIR / 'audio'
 PY = HERE.parent / 'auto-transcribe' / '.venv' / 'Scripts' / 'python.exe'
 
-PILOT_N = 300
+PILOT_N = 2000            # user-authorized subset scale (2026-08-01)
 PAD = 3.0                 # clip padding around the annotated span (s)
 
 # root_position_intervals -> our 8-quality vocab (prep_features folding rules:
@@ -151,7 +151,7 @@ def download(limit: int) -> None:
                '-f', 'bestaudio[ext=m4a]/bestaudio',
                '-o', str(AUDIO_DIR / f'{yt}.%(ext)s'),
                '--no-playlist', '--retries', '2',
-               '--sleep-interval', '2', '--max-sleep-interval', '6',
+               '--sleep-interval', '8', '--max-sleep-interval', '20',
                '--quiet', '--no-warnings',
                f'https://www.youtube.com/watch?v={yt}']
         r = subprocess.run(cmd, capture_output=True, text=True,
