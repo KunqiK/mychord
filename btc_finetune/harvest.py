@@ -39,6 +39,22 @@ def main() -> None:
         sys.exit(f'{ck.name} missing')
     old = HERE / 'best.pt'
     if old.exists():
+        # deploy only when this run actually beats the incumbent (run5
+        # lesson: more data can regress — thin batch-2 clips diluted val
+        # 33.5 -> 32.1; blind deployment would have shipped the worse model)
+        import torch
+        inc = torch.load(old, map_location='cpu',
+                         weights_only=False).get('val_acc', -1.0)
+        if best_acc <= inc:
+            shutil.copy(ck, HERE / f'{tag}_best_ep{best_e}.pt')
+            for p in HERE.glob('ckpt_epoch*.pt'):
+                p.unlink()
+            if (HERE / 'latest.pt').exists():
+                shutil.move(HERE / 'latest.pt', HERE / f'{tag}_latest.pt')
+            shutil.move(log_file, HERE / f'train_{tag}.log')
+            print(f'NOT deployed: {best_acc:.4f} <= incumbent {inc:.4f}; '
+                  f'run archived, best.pt unchanged, sweep skipped')
+            return
         shutil.move(old, HERE / f'best_pre_{tag}.pt')
     shutil.copy(ck, HERE / 'best.pt')
     for p in HERE.glob('ckpt_epoch*.pt'):
