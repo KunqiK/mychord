@@ -39,7 +39,14 @@ sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
 FEAT_DIR = HERE / 'features'
 HT_DIR = HERE / 'features_ht'      # HookTheory clips (optional, auto-detected)
-USER_REPEAT = 2                    # upweight the user's own songs vs HT volume
+USER_REPEAT = int(os.environ.get('BTC_USER_REPEAT', '2'))
+                                   # upweight the user's own songs vs HT volume
+HT_MIN_ANN_SEC = float(os.environ.get('BTC_HT_MIN_ANN_SEC', '0'))
+                                   # quality gate on HookTheory clips: drop any
+                                   # with less than this many annotated seconds
+                                   # (run5 lesson — clips ranked 300-2000 by
+                                   # annotation length diluted val 33.5 -> 32.1;
+                                   # more data only helps if it is not thinner)
 SPLIT_JSON = HERE / 'split.json'
 LATEST = HERE / 'latest.pt'
 PRETRAINED = BTC_DIR / 'test' / 'btc_model_large_voca.pt'
@@ -184,6 +191,17 @@ def main() -> None:
     train_bases, val_bases = load_split()
     ht_bases = sorted(p.stem for p in HT_DIR.glob('*.npz')) \
         if HT_DIR.is_dir() else []
+    if ht_bases and HT_MIN_ANN_SEC > 0:
+        clips = HERE.parent / 'auto-transcribe' / 'models' / 'hooktheory' / 'clips.jsonl'
+        ann = {}
+        with open(clips, encoding='utf-8') as f:
+            for ln in f:
+                e = json.loads(ln)
+                ann[e['yt']] = e['ann_sec']
+        before = len(ht_bases)
+        ht_bases = [b for b in ht_bases if ann.get(b, 0) >= HT_MIN_ANN_SEC]
+        log(f'HT quality gate >={HT_MIN_ANN_SEC}s annotated: '
+            f'{before} -> {len(ht_bases)} clips')
     tr_entries = [(FEAT_DIR, b, USER_REPEAT if ht_bases else 1)
                   for b in train_bases] \
         + [(HT_DIR, b, 1) for b in ht_bases]
