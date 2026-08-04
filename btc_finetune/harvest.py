@@ -31,8 +31,14 @@ def main() -> None:
     if not epochs:
         sys.exit('no epochs in train.log')
     best_e, best_acc = max(epochs, key=lambda x: x[1])
+    # val_acc swings ~1.24pp between adjacent epochs of the same model, so a
+    # single max is a lucky draw, not a score. Report the top-5 mean beside it
+    # and treat gaps under ~2.5pp as ties to be settled by compare_ckpts.py
+    # (the 34-song end-to-end eval), never by val_acc alone.
+    top5 = sorted(a for _, a in epochs)[-5:]
+    robust = sum(top5) / len(top5)
     print(f'best epoch {best_e} val_acc {best_acc:.4f} '
-          f'({len(epochs)} epochs trained)')
+          f'(top-5 mean {robust:.4f}, {len(epochs)} epochs trained)')
 
     ck = HERE / f'ckpt_epoch{best_e}.pt'
     if not ck.exists():
@@ -45,7 +51,8 @@ def main() -> None:
         import torch
         inc = torch.load(old, map_location='cpu',
                          weights_only=False).get('val_acc', -1.0)
-        if best_acc <= inc:
+        if best_acc <= inc + 0.025:      # inside the val-noise floor: archive
+                                         # and let compare_ckpts.py decide
             shutil.copy(ck, HERE / f'{tag}_best_ep{best_e}.pt')
             for p in HERE.glob('ckpt_epoch*.pt'):
                 p.unlink()

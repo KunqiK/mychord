@@ -47,6 +47,16 @@ HT_MIN_ANN_SEC = float(os.environ.get('BTC_HT_MIN_ANN_SEC', '0'))
                                    # (run5 lesson — clips ranked 300-2000 by
                                    # annotation length diluted val 33.5 -> 32.1;
                                    # more data only helps if it is not thinner)
+HT_MAX_AGREE = float(os.environ.get('BTC_HT_MAX_AGREE', '0'))
+                                   # HARD-EXAMPLE selection: keep only clips the
+                                   # blind judge (official pretrained ckpt) scores
+                                   # BELOW this root agreement — see verify_ht.py.
+                                   # HookTheory medians 0.839 for that judge vs
+                                   # 0.484 on the user corpus, so the easy bulk
+                                   # teaches nothing that transfers; the low-
+                                   # agreement clips are the dense/ambiguous ones
+                                   # that sit closest to the target domain.
+                                   # 0 = keep all.
 SPLIT_JSON = HERE / 'split.json'
 LATEST = HERE / 'latest.pt'
 PRETRAINED = BTC_DIR / 'test' / 'btc_model_large_voca.pt'
@@ -60,7 +70,11 @@ PATIENCE = 12              # early stop: epochs without a new val_acc best
 TRAIN_STRIDE = 54          # 50% overlapping windows for training
 VAL_STRIDE = 108           # non-overlapping for validation
 SEED = 1337
-NUM_THREADS = 8
+NUM_THREADS = int(os.environ.get('BTC_NUM_THREADS', '8'))
+# Lower this when co-scheduling with a separation run: two torch jobs each
+# asking for 8 threads on an 8-core chip oversubscribe and both crawl
+# (OpenMP threads spin-wait). 4 threads + BelowNormal priority lets training
+# fill the idle cores without stealing from the foreground job.
 # pitch-shift augmentation (BTC-paper standard, -5..+6 semitones): the CQT has
 # 24 bins/octave = 2 bins/semitone, so a semitone shift is a pure bin roll —
 # no audio re-rendering. Train-time only; validation stays unaugmented so val
@@ -201,6 +215,14 @@ def main() -> None:
         before = len(ht_bases)
         ht_bases = [b for b in ht_bases if ann.get(b, 0) >= HT_MIN_ANN_SEC]
         log(f'HT quality gate >={HT_MIN_ANN_SEC}s annotated: '
+            f'{before} -> {len(ht_bases)} clips')
+    if ht_bases and HT_MAX_AGREE > 0:
+        agree_f = HERE / 'features_ht_agree.json'
+        agree = json.loads(agree_f.read_text(encoding='utf-8'))
+        before = len(ht_bases)
+        ht_bases = [b for b in ht_bases
+                    if (agree.get(b) or {}).get('root', 1.0) < HT_MAX_AGREE]
+        log(f'HT hard-example gate (blind-judge root <{HT_MAX_AGREE}): '
             f'{before} -> {len(ht_bases)} clips')
     tr_entries = [(FEAT_DIR, b, USER_REPEAT if ht_bases else 1)
                   for b in train_bases] \
